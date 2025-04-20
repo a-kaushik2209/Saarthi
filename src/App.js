@@ -143,38 +143,6 @@ function App() {
         >
           {sidebarOpen ? <CloseIcon /> : <MenuIcon />}
         </button>
-        
-        {/* Tooltip for new users */}
-        {showMenuTooltip && !sidebarOpen && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '60px',
-            transform: 'translateY(-50%)',
-            background: '#333',
-            color: 'white',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            fontSize: '14px',
-            whiteSpace: 'nowrap',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
-            zIndex: 1000,
-            animation: 'fadeIn 0.5s'
-          }}>
-            Click here for menu
-            <div style={{
-              position: 'absolute',
-              left: '-6px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: '0',
-              height: '0',
-              borderTop: '6px solid transparent',
-              borderBottom: '6px solid transparent',
-              borderRight: '6px solid #333'
-            }}></div>
-          </div>
-        )}
       </div>
 
       {/* Sidebar Overlay */}
