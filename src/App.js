@@ -1,0 +1,268 @@
+import React, { useState } from 'react';
+import LandingPage from './components/LandingPage';
+import EmergencyReport from './components/EmergencyReport';
+import PriorityMap from './components/PriorityMap';
+import VolunteerSignup from './components/VolunteerSignup';
+import Dashboard from './components/Dashboard';
+import ProfilePage from './components/ProfilePage';
+import LoginPage from './components/LoginPage';
+import './App.css';
+
+const MenuIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="12" x2="21" y2="12"></line>
+    <line x1="3" y1="6" x2="21" y2="6"></line>
+    <line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+);
+
+const HomeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+    <line x1="12" y1="9" x2="12" y2="13"></line>
+    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+  </svg>
+);
+
+const MapIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+    <line x1="8" y1="2" x2="8" y2="18"></line>
+    <line x1="16" y1="6" x2="16" y2="22"></line>
+  </svg>
+);
+
+const VolunteerIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+    <circle cx="9" cy="7" r="4"></circle>
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+  </svg>
+);
+
+const DashboardIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="7" height="7"></rect>
+    <rect x="14" y="3" width="7" height="7"></rect>
+    <rect x="14" y="14" width="7" height="7"></rect>
+    <rect x="3" y="14" width="7" height="7"></rect>
+  </svg>
+);
+
+const ProfileIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+    <circle cx="12" cy="7" r="4"></circle>
+  </svg>
+);
+
+const LoginIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+    <polyline points="10 17 15 12 10 7"></polyline>
+    <line x1="15" y1="12" x2="3" y2="12"></line>
+  </svg>
+);
+
+const LogoutIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+    <polyline points="16 17 21 12 16 7"></polyline>
+    <line x1="21" y1="12" x2="9" y2="12"></line>
+  </svg>
+);
+
+function App() {
+  const [page, setPage] = useState('landing');
+  const [profile, setProfile] = useState(null);
+  const [profiles, setProfiles] = useState([]); // store all signed up profiles
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showMenuTooltip, setShowMenuTooltip] = useState(true); // Show tooltip for new users
+  const [showLogoutMessage, setShowLogoutMessage] = useState(false); // For logout message
+
+  const handleProfileSignup = (newProfile) => {
+    newProfile.contributions = [
+      { type: 'Food Donation', date: '2025-04-10', details: 'Donated 20 meals to East Delhi' },
+      { type: 'Flood Relief', date: '2025-04-14', details: 'Volunteered at Yamuna Bank' }
+    ];
+    newProfile.reports = [
+      { desc: 'Reported flooding at Yamuna Bank', date: '2025-04-13' }
+    ];
+    setProfiles(prev => [...prev, newProfile]);
+    setProfile(newProfile);
+  };
+
+  const handleNavigation = (targetPage) => {
+    setPage(targetPage);
+    setSidebarOpen(false);
+    setShowMenuTooltip(false);
+  };
+  
+  const handleLogout = () => {
+    setShowLogoutMessage(true);
+    setSidebarOpen(false);
+    
+    setTimeout(() => {
+      setProfile(null);
+      setPage('landing');
+      setShowLogoutMessage(false);
+    }, 2000);
+  };
+
+  return (
+    <div className="app-container">
+      {/* Sidebar Toggle Button with Tooltip */}
+      <div style={{ position: 'relative' }}>
+        <button 
+          className={`sidebar-toggle ${!sidebarOpen && 'pulse'}`}
+          onClick={() => {
+            setSidebarOpen(!sidebarOpen);
+            setShowMenuTooltip(false);
+          }}
+          aria-label="Toggle navigation"
+          style={{
+            background: sidebarOpen ? '#333' : 'var(--primary)',
+            boxShadow: '0 0 15px rgba(255, 143, 0, 0.5)',
+            animation: !sidebarOpen ? 'pulse 2s infinite' : 'none'
+          }}
+        >
+          {sidebarOpen ? <CloseIcon /> : <MenuIcon />}
+        </button>
+        
+        {/* Tooltip for new users */}
+        {showMenuTooltip && !sidebarOpen && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '60px',
+            transform: 'translateY(-50%)',
+            background: '#333',
+            color: 'white',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            fontSize: '14px',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+            zIndex: 1000,
+            animation: 'fadeIn 0.5s'
+          }}>
+            Click here for menu
+            <div style={{
+              position: 'absolute',
+              left: '-6px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: '0',
+              height: '0',
+              borderTop: '6px solid transparent',
+              borderBottom: '6px solid transparent',
+              borderRight: '6px solid #333'
+            }}></div>
+          </div>
+        )}
+      </div>
+
+      {/* Sidebar Overlay */}
+      <div 
+        className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      ></div>
+
+      {/* Sidebar */}
+      <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="logo">
+          <div className="logo-text">Saarthi</div>
+        </div>
+        <nav>
+          <div className={`nav-link ${page === 'landing' ? 'active' : ''}`} onClick={() => handleNavigation('landing')}>
+            <HomeIcon /> <span>Home</span>
+          </div>
+          <div className={`nav-link ${page === 'report' ? 'active' : ''}`} onClick={() => handleNavigation('report')}>
+            <AlertIcon /> <span>Report Emergency</span>
+          </div>
+          <div className={`nav-link ${page === 'map' ? 'active' : ''}`} onClick={() => handleNavigation('map')}>
+            <MapIcon /> <span>Priority Map</span>
+          </div>
+          <div className={`nav-link ${page === 'volunteer' ? 'active' : ''}`} onClick={() => handleNavigation('volunteer')}>
+            <VolunteerIcon /> <span>Volunteer/Donate</span>
+          </div>
+          <div className={`nav-link ${page === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavigation('dashboard')}>
+            <DashboardIcon /> <span>Dashboard</span>
+          </div>
+          {profile && (
+            <>
+              <div className={`nav-link ${page === 'profile' ? 'active' : ''}`} onClick={() => handleNavigation('profile')}>
+                <ProfileIcon /> <span>My Profile</span>
+              </div>
+              <div className="nav-link" onClick={handleLogout} style={{ marginTop: '20px', borderTop: '1px solid #333', paddingTop: '20px' }}>
+                <LogoutIcon /> <span>Logout</span>
+              </div>
+            </>
+          )}
+          {!profile && (
+            <div className={`nav-link ${page === 'login' ? 'active' : ''}`} onClick={() => handleNavigation('login')}>
+              <LoginIcon /> <span>Login/Signup</span>
+            </div>
+          )}
+        </nav>
+      </div>
+
+      {/* Main Content */}
+      <div className="main-content">
+        <div className="fade-in">
+          {page === 'landing' && <LandingPage setPage={handleNavigation} profile={profile} showLogin={true} />}
+          {page === 'report' && <EmergencyReport setPage={handleNavigation} />}
+          {page === 'map' && <PriorityMap setPage={handleNavigation} />}
+          {page === 'volunteer' && <VolunteerSignup setPage={handleNavigation} setProfile={handleProfileSignup} />}
+          {page === 'dashboard' && <Dashboard setPage={handleNavigation} />}
+          {page === 'profile' && <ProfilePage setPage={handleNavigation} profile={profile} />}
+          {page === 'login' && <LoginPage setPage={handleNavigation} setProfile={setProfile} profiles={profiles} />}
+        </div>
+      </div>
+      
+      {/* Logout Message */}
+      {showLogoutMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: '#252525',
+          color: 'white',
+          padding: '15px 20px',
+          borderRadius: '8px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          zIndex: 1000,
+          animation: 'fadeIn 0.3s',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          border: '1px solid var(--primary)'
+        }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Successfully logged out. Redirecting...</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
