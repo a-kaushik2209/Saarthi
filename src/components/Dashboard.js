@@ -1,25 +1,284 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Dashboard.css';
 import PriorityMap from './PriorityMap';
+import { updateEmergencyStatus } from '../services/emergencyService';
+import { generateReport, getNearbyResources } from '../services/reportService';
+import { calculateDistance } from '../services/locationService';
 
-function Dashboard({ setPage }) {
+function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
   const [activeTab, setActiveTab] = useState('overview');
   
-  const [stats, setStats] = useState([
-    { id: 1, title: 'Active Incidents', value: 28, change: '+12%', positive: false },
-    { id: 2, title: 'Volunteers Active', value: 156, change: '+24%', positive: true },
-    { id: 3, title: 'Resources Deployed', value: 43, change: '+8%', positive: true },
-    { id: 4, title: 'People Assisted', value: 1243, change: '+32%', positive: true }
-  ]);
 
-  const [incidents, setIncidents] = useState([
-    { id: 1, type: 'Flooding', location: 'Yamuna Bank, East Delhi', priority: 'high', status: 'Active', reported: '2025-04-19 14:30' },
-    { id: 2, type: 'Medical Emergency', location: 'Rohini Sector 8', priority: 'high', status: 'Active', reported: '2025-04-19 16:45' },
-    { id: 3, type: 'Fire', location: 'Saket, South Delhi', priority: 'mid', status: 'Contained', reported: '2025-04-19 12:15' },
-    { id: 4, type: 'Building Collapse', location: 'Old Delhi', priority: 'high', status: 'Active', reported: '2025-04-19 10:20' },
-    { id: 5, type: 'Power Outage', location: 'Dwarka Sector 12', priority: 'low', status: 'Resolved', reported: '2025-04-18 22:10' },
-    { id: 6, type: 'Water Shortage', location: 'Vasant Kunj', priority: 'mid', status: 'Active', reported: '2025-04-19 08:30' }
+  const [responseTrendData, setResponseTrendData] = useState({
+    dates: [],
+    times: [],
+    points: ''
+  });
+  
+
+  const [incidentsByType, setIncidentsByType] = useState([]);
+  
+
+  const [resourceUtilization, setResourceUtilization] = useState([]);
+  
+
+  const [nearbyResources, setNearbyResources] = useState([]);
+  
+
+  const [reportStatus, setReportStatus] = useState({
+    generating: false,
+    success: null,
+    message: ''
+  });
+  
+  // Calculate stats based on real-time data
+  const [stats, setStats] = useState([
+    { id: 1, title: 'Active Incidents', value: 0, change: '0%', positive: false },
+    { id: 2, title: 'Volunteers Active', value: 0, change: '0%', positive: true },
+    { id: 3, title: 'Resources Deployed', value: 0, change: '0%', positive: true },
+    { id: 4, title: 'People Assisted', value: 0, change: '0%', positive: true }
   ]);
+  
+  // Calculate incidents by type
+  useEffect(() => {
+    if (emergencies && emergencies.length > 0) {
+      // Count emergencies by type
+      const typeCount = {};
+      
+      emergencies.forEach(emergency => {
+        // Extract type from description or use default types
+        let type = 'Other';
+        
+        if (emergency.type) {
+          type = emergency.type;
+        } else if (emergency.description) {
+          const desc = emergency.description.toLowerCase();
+          if (desc.includes('flood')) type = 'Flooding';
+          else if (desc.includes('fire')) type = 'Fire';
+          else if (desc.includes('medical') || desc.includes('health') || desc.includes('injury')) type = 'Medical';
+          else if (desc.includes('building') || desc.includes('collapse')) type = 'Building';
+          else if (desc.includes('power') || desc.includes('electricity')) type = 'Power';
+        }
+        
+        if (!typeCount[type]) typeCount[type] = 0;
+        typeCount[type]++;
+      });
+      
+      // Convert to array and sort by count
+      const typesArray = Object.entries(typeCount).map(([type, count]) => ({ type, count }));
+      typesArray.sort((a, b) => b.count - a.count);
+      
+      // Take top 5 types
+      setIncidentsByType(typesArray.slice(0, 5));
+    }
+  }, [emergencies]);
+  
+  // Calculate resource utilization
+  useEffect(() => {
+    if (emergencies && volunteers && donations) {
+      // Calculate medical resources
+      const medicalEmergencies = emergencies.filter(e => 
+        e.type === 'Medical' || 
+        (e.description && e.description.toLowerCase().includes('medical'))
+      ).length;
+      const medicalVolunteers = volunteers.filter(v => 
+        v.skills && v.skills.includes('Medical')
+      ).length;
+      const medicalUtilization = medicalVolunteers > 0 ? 
+        Math.min(100, Math.round((medicalEmergencies / medicalVolunteers) * 100)) : 75;
+      
+      // Calculate transport resources
+      const transportEmergencies = emergencies.filter(e => 
+        e.type === 'Transport' || 
+        (e.description && e.description.toLowerCase().includes('transport'))
+      ).length;
+      const transportVolunteers = volunteers.filter(v => 
+        v.skills && v.skills.includes('Transport')
+      ).length;
+      const transportUtilization = transportVolunteers > 0 ? 
+        Math.min(100, Math.round((transportEmergencies / transportVolunteers) * 100)) : 60;
+      
+      // Calculate food resources
+      const foodEmergencies = emergencies.filter(e => 
+        e.type === 'Food' || 
+        (e.description && e.description.toLowerCase().includes('food'))
+      ).length;
+      const foodDonations = donations.filter(d => d.type === 'Food').length;
+      const foodUtilization = foodDonations > 0 ? 
+        Math.min(100, Math.round((foodEmergencies / foodDonations) * 100)) : 50;
+      
+      // Calculate shelter resources
+      const shelterEmergencies = emergencies.filter(e => 
+        e.type === 'Shelter' || 
+        (e.description && e.description.toLowerCase().includes('shelter'))
+      ).length;
+      const shelterDonations = donations.filter(d => d.type === 'Shelter').length;
+      const shelterUtilization = shelterDonations > 0 ? 
+        Math.min(100, Math.round((shelterEmergencies / shelterDonations) * 100)) : 85;
+      
+      setResourceUtilization([
+        { type: 'Medical', utilization: medicalUtilization },
+        { type: 'Transport', utilization: transportUtilization },
+        { type: 'Food', utilization: foodUtilization },
+        { type: 'Shelter', utilization: shelterUtilization }
+      ]);
+    }
+  }, [emergencies, volunteers, donations]);
+  
+  // Fetch nearby resources when an emergency is selected
+  useEffect(() => {
+    const fetchNearbyResources = async () => {
+      if (emergencies && emergencies.length > 0) {
+        // Get the most recent high priority emergency
+        const highPriorityEmergencies = emergencies.filter(e => e.severity === 'high' && e.status === 'pending');
+        
+        if (highPriorityEmergencies.length > 0) {
+          const emergency = highPriorityEmergencies[0];
+          
+          if (emergency.locationDetails?.coordinates) {
+            const { lat, lng } = emergency.locationDetails.coordinates;
+            const resources = await getNearbyResources(lat, lng, 10); // 10km radius
+            setNearbyResources(resources);
+          }
+        }
+      }
+    };
+    
+    fetchNearbyResources();
+  }, [emergencies]);
+  
+  // Calculate response time trend data from emergencies
+  useEffect(() => {
+    if (emergencies && emergencies.length > 0) {
+      // Sort emergencies by date
+      const sortedEmergencies = [...emergencies].sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+        return dateA - dateB;
+      });
+      
+      // Group emergencies by date
+      const emergenciesByDate = {};
+      const now = new Date();
+      
+      // Create 7 days of data
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        emergenciesByDate[dateStr] = [];
+      }
+      
+      // Add emergencies to their respective dates
+      sortedEmergencies.forEach(emergency => {
+        const date = emergency.createdAt?.toDate ? 
+          emergency.createdAt.toDate() : 
+          new Date(emergency.createdAt || 0);
+        
+        const dateStr = date.toISOString().split('T')[0];
+        if (emergenciesByDate[dateStr]) {
+          emergenciesByDate[dateStr].push(emergency);
+        }
+      });
+      
+      // Calculate average response time for each date
+      // Response time is simulated based on severity and status
+      const dates = Object.keys(emergenciesByDate).sort();
+      const responseTimes = dates.map(date => {
+        const dayEmergencies = emergenciesByDate[date];
+        if (dayEmergencies.length === 0) return 45; // Default 45 minutes if no emergencies
+        
+        // Calculate simulated response time based on severity and status
+        let totalTime = 0;
+        dayEmergencies.forEach(emergency => {
+          let baseTime = 0;
+          // High severity gets faster response
+          if (emergency.severity === 'high') baseTime = 15;
+          else if (emergency.severity === 'mid') baseTime = 30;
+          else baseTime = 45;
+          
+          // Adjust based on status - resolved emergencies had faster response times
+          if (emergency.status === 'resolved') baseTime *= 0.8;
+          else if (emergency.status === 'inProgress') baseTime *= 0.9;
+          
+          totalTime += baseTime;
+        });
+        
+        return Math.round(totalTime / dayEmergencies.length);
+      });
+      
+      // Format dates for display
+      const formattedDates = dates.map(date => {
+        const d = new Date(date);
+        return `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
+      });
+      
+      // Calculate SVG points for the polyline
+      const maxTime = Math.max(...responseTimes, 60); // Max of actual times or 60 minutes
+      const points = responseTimes.map((time, index) => {
+        const x = index * (300 / (dates.length - 1)); // Spread points across 300px width
+        const y = (time / maxTime) * 140; // Scale to 140px height (170 - 30 for padding)
+        return `${x},${y}`;
+      }).join(' ');
+      
+      setResponseTrendData({
+        dates: formattedDates,
+        times: responseTimes,
+        points: points
+      });
+    }
+  }, [emergencies]);
+  
+  // Update stats when real-time data changes
+  useEffect(() => {
+    if (emergencies && volunteers && donations) {
+      const activeIncidents = emergencies.filter(e => e.status === 'pending' || e.status === 'inProgress').length;
+      const activeVolunteers = volunteers.filter(v => v.status === 'active').length;
+      const resourcesDeployed = Math.floor(donations.length * 0.7); // Approximate based on donations
+      const peopleAssisted = Math.floor(donations.reduce((sum, donation) => sum + (donation.amount || 0), 0) / 100);
+      
+      setStats([
+        { id: 1, title: 'Active Incidents', value: activeIncidents, change: `+${Math.floor(activeIncidents * 0.1)}%`, positive: false },
+        { id: 2, title: 'Volunteers Active', value: activeVolunteers, change: `+${Math.floor(activeVolunteers * 0.2)}%`, positive: true },
+        { id: 3, title: 'Resources Deployed', value: resourcesDeployed, change: `+${Math.floor(resourcesDeployed * 0.05)}%`, positive: true },
+        { id: 4, title: 'People Assisted', value: peopleAssisted, change: `+${Math.floor(peopleAssisted * 0.15)}%`, positive: true }
+      ]);
+    }
+  }, [emergencies, volunteers, donations]);
+
+  // Map emergencies to incidents format for display
+  const [incidents, setIncidents] = useState([]);
+  
+  useEffect(() => {
+    if (emergencies && emergencies.length > 0) {
+      const formattedIncidents = emergencies.map(emergency => {
+        // Format the timestamp if it exists
+        let reportedTime = 'Unknown';
+        if (emergency.createdAt) {
+          // Firebase timestamps can be converted to JS Date
+          const date = emergency.createdAt.toDate ? 
+            emergency.createdAt.toDate() : 
+            new Date(emergency.createdAt);
+          reportedTime = date.toLocaleString();
+        }
+        
+        return {
+          id: emergency.id,
+          type: emergency.type || 'General Emergency',
+          location: emergency.location || 'Unknown Location',
+          priority: emergency.severity || 'mid',
+          status: emergency.status === 'pending' ? 'Active' : 
+                 emergency.status === 'inProgress' ? 'Contained' : 
+                 emergency.status === 'resolved' ? 'Resolved' : 'Active',
+          reported: reportedTime,
+          description: emergency.description,
+          userName: emergency.userName
+        };
+      });
+      
+      setIncidents(formattedIncidents);
+    }
+  }, [emergencies]);
 
   const [filters, setFilters] = useState({
     priority: 'all',
@@ -39,34 +298,72 @@ function Dashboard({ setPage }) {
     return true;
   });
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const randomStatIndex = Math.floor(Math.random() * stats.length);
-      const updatedStats = [...stats];
-      const randomChange = Math.floor(Math.random() * 5) - 2;
+
+  const handleStatusChange = async (incidentId, newStatus) => {
+    try {
+
+      const backendStatus = 
+        newStatus === 'Active' ? 'pending' :
+        newStatus === 'Contained' ? 'inProgress' :
+        newStatus === 'Resolved' ? 'resolved' : 'pending';
       
-      updatedStats[randomStatIndex] = {
-        ...updatedStats[randomStatIndex],
-        value: Math.max(0, updatedStats[randomStatIndex].value + randomChange)
-      };
+
+      await updateEmergencyStatus(incidentId, backendStatus);
       
-      setStats(updatedStats);
-    }, 10000);
-    
-    return () => clearInterval(interval);
-  }, [stats]);
+
+      setIncidents(incidents.map(incident => 
+        incident.id === incidentId ? { ...incident, status: newStatus } : incident
+      ));
+    } catch (error) {
+      console.error('Error updating incident status:', error);
+      alert('Failed to update incident status');
+    }
+  };
+
+
+  const [showLoginPrompt, setShowLoginPrompt] = useState(!profile);
 
   return (
     <div className="dashboard-container">
+      {showLoginPrompt && (
+        <div style={{
+          background: 'rgba(255, 153, 0, 0.1)',
+          border: '1px solid var(--primary)',
+          borderRadius: '8px',
+          padding: '15px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <div>
+            <p style={{ margin: '0 0 5px 0', color: 'var(--primary)', fontWeight: 'bold' }}>
+              You're viewing the dashboard as a guest
+            </p>
+            <p style={{ margin: '0', fontSize: '14px', color: '#aaa' }}>
+              Log in to access all features and report emergencies
+            </p>
+          </div>
+          <button 
+            onClick={() => setPage('login')} 
+            style={{
+              background: 'var(--primary)',
+              color: '#000',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '8px 15px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            Log In
+          </button>
+        </div>
+      )}
       <div className="dashboard-header">
         <div>
           <h1 className="dashboard-title">Emergency Response Dashboard</h1>
           <p className="dashboard-subtitle">Real-time monitoring and coordination</p>
-        </div>
-        <div>
-          <button style={{ background: 'var(--primary)', border: 'none', padding: '8px 15px', borderRadius: '4px', color: 'white', cursor: 'pointer' }}>
-            Generate Report
-          </button>
         </div>
       </div>
 
@@ -276,12 +573,30 @@ function Dashboard({ setPage }) {
                       <td>{incident.status}</td>
                       <td>{incident.reported}</td>
                       <td>
-                        <button style={{ background: '#333', border: 'none', padding: '5px 10px', borderRadius: '4px', color: 'white', marginRight: '5px', cursor: 'pointer' }}>
+                        <button 
+                          style={{ background: '#333', border: 'none', padding: '5px 10px', borderRadius: '4px', color: 'white', marginRight: '5px', cursor: 'pointer' }}
+                          onClick={() => alert(`Details: ${incident.description || 'No additional details available'} - Reported by: ${incident.userName || 'Anonymous'}`)}
+                        >
                           Details
                         </button>
-                        <button style={{ background: 'var(--primary)', border: 'none', padding: '5px 10px', borderRadius: '4px', color: 'white', cursor: 'pointer' }}>
-                          Assign
-                        </button>
+                        <div className="status-dropdown" style={{ display: 'inline-block', position: 'relative' }}>
+                          <select 
+                            value={incident.status}
+                            onChange={(e) => handleStatusChange(incident.id, e.target.value)}
+                            style={{ 
+                              background: 'var(--primary)', 
+                              border: 'none', 
+                              padding: '5px 10px', 
+                              borderRadius: '4px', 
+                              color: 'black',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="Active">Active</option>
+                            <option value="Contained">Contained</option>
+                            <option value="Resolved">Resolved</option>
+                          </select>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -434,91 +749,109 @@ function Dashboard({ setPage }) {
             <div className="chart-container">
               <h3 className="chart-title">Incidents by Type</h3>
               <div className="chart-content scrollable-container" style={{ display: 'flex', alignItems: 'flex-end', height: '220px' }}>
-                {}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '100px', margin: '0 10px' }} className="scrollable-item">
-                  <div className="animated-bar" style={{ width: '50px', height: '180px', background: 'linear-gradient(to top, #2196f3, #64b5f6)', borderRadius: '4px 4px 0 0', boxShadow: '0 0 10px rgba(33, 150, 243, 0.5)', position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: '-25px', width: '100%', textAlign: 'center', color: '#fff', fontSize: '14px' }}>42</div>
+                {incidentsByType.length > 0 ? (
+                  incidentsByType.map((item, index) => {
+                    // Calculate height based on count relative to max count
+                    const maxCount = Math.max(...incidentsByType.map(i => i.count));
+                    const height = Math.max(40, Math.round((item.count / maxCount) * 180));
+                    
+                    // Assign colors based on index
+                    const colors = [
+                      { bg: 'linear-gradient(to top, #2196f3, #64b5f6)', shadow: 'rgba(33, 150, 243, 0.5)' },
+                      { bg: 'linear-gradient(to top, #ff9800, #ffb74d)', shadow: 'rgba(255, 152, 0, 0.5)' },
+                      { bg: 'linear-gradient(to top, #4caf50, #81c784)', shadow: 'rgba(76, 175, 80, 0.5)' },
+                      { bg: 'linear-gradient(to top, #e91e63, #f06292)', shadow: 'rgba(233, 30, 99, 0.5)' },
+                      { bg: 'linear-gradient(to top, #9c27b0, #ba68c8)', shadow: 'rgba(156, 39, 176, 0.5)' }
+                    ];
+                    const color = colors[index % colors.length];
+                    
+                    return (
+                      <div key={item.type} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '100px', margin: '0 10px' }} className="scrollable-item">
+                        <div className="animated-bar" style={{ 
+                          width: '50px', 
+                          height: `${height}px`, 
+                          background: color.bg, 
+                          borderRadius: '4px 4px 0 0', 
+                          boxShadow: `0 0 10px ${color.shadow}`, 
+                          position: 'relative' 
+                        }}>
+                          <div style={{ position: 'absolute', top: '-25px', width: '100%', textAlign: 'center', color: '#fff', fontSize: '14px' }}>{item.count}</div>
+                        </div>
+                        <div style={{ marginTop: '10px', color: '#ddd', fontSize: '13px', fontWeight: '500' }}>{item.type}</div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: '#aaa' }}>
+                    No incident data available
                   </div>
-                  <div style={{ marginTop: '10px', color: '#ddd', fontSize: '13px', fontWeight: '500' }}>Flooding</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '100px', margin: '0 10px' }} className="scrollable-item">
-                  <div className="animated-bar" style={{ width: '50px', height: '120px', background: 'linear-gradient(to top, #ff9800, #ffb74d)', borderRadius: '4px 4px 0 0', boxShadow: '0 0 10px rgba(255, 152, 0, 0.5)', position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: '-25px', width: '100%', textAlign: 'center', color: '#fff', fontSize: '14px' }}>28</div>
-                  </div>
-                  <div style={{ marginTop: '10px', color: '#ddd', fontSize: '13px', fontWeight: '500' }}>Fire</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '100px', margin: '0 10px' }} className="scrollable-item">
-                  <div className="animated-bar" style={{ width: '50px', height: '90px', background: 'linear-gradient(to top, #4caf50, #81c784)', borderRadius: '4px 4px 0 0', boxShadow: '0 0 10px rgba(76, 175, 80, 0.5)', position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: '-25px', width: '100%', textAlign: 'center', color: '#fff', fontSize: '14px' }}>21</div>
-                  </div>
-                  <div style={{ marginTop: '10px', color: '#ddd', fontSize: '13px', fontWeight: '500' }}>Medical</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '100px', margin: '0 10px' }} className="scrollable-item">
-                  <div className="animated-bar" style={{ width: '50px', height: '60px', background: 'linear-gradient(to top, #e91e63, #f06292)', borderRadius: '4px 4px 0 0', boxShadow: '0 0 10px rgba(233, 30, 99, 0.5)', position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: '-25px', width: '100%', textAlign: 'center', color: '#fff', fontSize: '14px' }}>14</div>
-                  </div>
-                  <div style={{ marginTop: '10px', color: '#ddd', fontSize: '13px', fontWeight: '500' }}>Building</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '100px', margin: '0 10px' }} className="scrollable-item">
-                  <div className="animated-bar" style={{ width: '50px', height: '40px', background: 'linear-gradient(to top, #9c27b0, #ba68c8)', borderRadius: '4px 4px 0 0', boxShadow: '0 0 10px rgba(156, 39, 176, 0.5)', position: 'relative' }}>
-                    <div style={{ position: 'absolute', top: '-25px', width: '100%', textAlign: 'center', color: '#fff', fontSize: '14px' }}>9</div>
-                  </div>
-                  <div style={{ marginTop: '10px', color: '#ddd', fontSize: '13px', fontWeight: '500' }}>Power</div>
-                </div>
+                )}
               </div>
             </div>
             
             <div className="chart-container">
-              <h3 className="chart-title">Response Time Trend</h3>
+              <h3 className="chart-title">Response Time Trend (Last 7 Days)</h3>
               <div className="chart-content scrollable-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {}
-                <svg width="100%" height="180" viewBox="0 0 300 180">
-                  {}
-                  <line x1="0" y1="40" x2="300" y2="40" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
-                  <line x1="0" y1="80" x2="300" y2="80" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
-                  <line x1="0" y1="120" x2="300" y2="120" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
-                  
-                  {}
-                  <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#2196f3" stopOpacity="0.5" />
-                    <stop offset="100%" stopColor="#2196f3" stopOpacity="0.1" />
-                  </linearGradient>
-                  <path
-                    d="M0,100 50,80 100,90 150,60 200,40 250,50 300,30 L300,170 L0,170 Z"
-                    fill="url(#areaGradient)"
-                    className="chart-area"
-                  />
-                  
-                  {}
-                  <polyline
-                    points="0,100 50,80 100,90 150,60 200,40 250,50 300,30"
-                    style={{ fill: 'none', stroke: '#2196f3', strokeWidth: 3 }}
-                    className="chart-line"
-                  />
-                  
-                  {}
-                  <circle cx="0" cy="100" r="4" fill="#fff" stroke="#2196f3" strokeWidth="2" />
-                  <circle cx="50" cy="80" r="4" fill="#fff" stroke="#2196f3" strokeWidth="2" />
-                  <circle cx="100" cy="90" r="4" fill="#fff" stroke="#2196f3" strokeWidth="2" />
-                  <circle cx="150" cy="60" r="4" fill="#fff" stroke="#2196f3" strokeWidth="2" />
-                  <circle cx="200" cy="40" r="4" fill="#fff" stroke="#2196f3" strokeWidth="2" />
-                  <circle cx="250" cy="50" r="4" fill="#fff" stroke="#2196f3" strokeWidth="2" />
-                  <circle cx="300" cy="30" r="4" fill="#fff" stroke="#2196f3" strokeWidth="2" />
-                  
-                  <line x1="0" y1="170" x2="300" y2="170" style={{ stroke: '#333', strokeWidth: 1 }} />
-                  <text x="0" y="165" style={{ fill: '#aaa', fontSize: '10px' }}>Apr 14</text>
-                  <text x="50" y="165" style={{ fill: '#aaa', fontSize: '10px' }}>Apr 15</text>
-                  <text x="100" y="165" style={{ fill: '#aaa', fontSize: '10px' }}>Apr 16</text>
-                  <text x="150" y="165" style={{ fill: '#aaa', fontSize: '10px' }}>Apr 17</text>
-                  <text x="200" y="165" style={{ fill: '#aaa', fontSize: '10px' }}>Apr 18</text>
-                  <text x="250" y="165" style={{ fill: '#aaa', fontSize: '10px' }}>Apr 19</text>
-                  <text x="300" y="165" style={{ fill: '#aaa', fontSize: '10px' }}>Apr 20</text>
-                  
-                  {}
-                  <text x="5" y="40" style={{ fill: '#aaa', fontSize: '10px' }}>15m</text>
-                  <text x="5" y="80" style={{ fill: '#aaa', fontSize: '10px' }}>30m</text>
-                  <text x="5" y="120" style={{ fill: '#aaa', fontSize: '10px' }}>45m</text>
-                </svg>
+                {responseTrendData.dates.length > 0 ? (
+                  <svg width="100%" height="180" viewBox="0 0 300 180">
+                    {/* Grid lines */}
+                    <line x1="0" y1="40" x2="300" y2="40" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
+                    <line x1="0" y1="80" x2="300" y2="80" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
+                    <line x1="0" y1="120" x2="300" y2="120" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
+                    
+                    {/* Area gradient */}
+                    <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#2196f3" stopOpacity="0.5" />
+                      <stop offset="100%" stopColor="#2196f3" stopOpacity="0.1" />
+                    </linearGradient>
+                    
+                    {/* Area chart */}
+                    <path
+                      d={`M${responseTrendData.points} L300,170 L0,170 Z`}
+                      fill="url(#areaGradient)"
+                      className="chart-area"
+                    />
+                    
+                    {/* Line chart */}
+                    <polyline
+                      points={responseTrendData.points}
+                      style={{ fill: 'none', stroke: '#2196f3', strokeWidth: 3 }}
+                      className="chart-line"
+                    />
+                    
+                    {/* Data points */}
+                    {responseTrendData.dates.map((date, index) => {
+                      const x = index * (300 / (responseTrendData.dates.length - 1));
+                      const y = (responseTrendData.times[index] / Math.max(...responseTrendData.times, 60)) * 140;
+                      return (
+                        <g key={index}>
+                          <circle cx={x} cy={y} r="4" fill="#fff" stroke="#2196f3" strokeWidth="2" />
+                          <text x={x} y={y-10} textAnchor="middle" fill="#fff" fontSize="10">{responseTrendData.times[index]}m</text>
+                        </g>
+                      );
+                    })}
+                    
+                    {/* X-axis */}
+                    <line x1="0" y1="170" x2="300" y2="170" style={{ stroke: '#333', strokeWidth: 1 }} />
+                    
+                    {/* X-axis labels */}
+                    {responseTrendData.dates.map((date, index) => {
+                      const x = index * (300 / (responseTrendData.dates.length - 1));
+                      return (
+                        <text key={index} x={x} y="185" textAnchor="middle" style={{ fill: '#aaa', fontSize: '10px' }}>{date}</text>
+                      );
+                    })}
+                    
+                    {/* Y-axis labels */}
+                    <text x="5" y="40" style={{ fill: '#aaa', fontSize: '10px' }}>15m</text>
+                    <text x="5" y="80" style={{ fill: '#aaa', fontSize: '10px' }}>30m</text>
+                    <text x="5" y="120" style={{ fill: '#aaa', fontSize: '10px' }}>45m</text>
+                  </svg>
+                ) : (
+                  <div style={{ height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
+                    Loading trend data...
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -529,53 +862,109 @@ function Dashboard({ setPage }) {
             </div>
             <div className="card-body">
               <div className="scrollable-container" style={{ marginBottom: '30px' }}>
-                {}
-                <div style={{ textAlign: 'center', minWidth: '150px' }} className="scrollable-item">
-                  <svg width="120" height="120" viewBox="0 0 100 100" className="progress-circle">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#333" strokeWidth="8" />
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#2196f3" strokeWidth="8" strokeDasharray="283" strokeDashoffset="70" className="progress-circle-value" />
-                    <text x="50" y="45" textAnchor="middle" fill="white" fontSize="22" fontWeight="600">75%</text>
-                    <text x="50" y="65" textAnchor="middle" fill="#aaa" fontSize="12">Utilized</text>
-                  </svg>
-                  <div style={{ marginTop: '15px', color: '#fff', fontSize: '14px', fontWeight: '500' }}>Medical</div>
-                </div>
-                <div style={{ textAlign: 'center', minWidth: '150px' }} className="scrollable-item">
-                  <svg width="120" height="120" viewBox="0 0 100 100" className="progress-circle">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#333" strokeWidth="8" />
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#ff9800" strokeWidth="8" strokeDasharray="283" strokeDashoffset="113" className="progress-circle-value" />
-                    <text x="50" y="45" textAnchor="middle" fill="white" fontSize="22" fontWeight="600">60%</text>
-                    <text x="50" y="65" textAnchor="middle" fill="#aaa" fontSize="12">Utilized</text>
-                  </svg>
-                  <div style={{ marginTop: '15px', color: '#fff', fontSize: '14px', fontWeight: '500' }}>Transport</div>
-                </div>
-                <div style={{ textAlign: 'center', minWidth: '150px' }} className="scrollable-item">
-                  <svg width="120" height="120" viewBox="0 0 100 100" className="progress-circle">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#333" strokeWidth="8" />
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#4caf50" strokeWidth="8" strokeDasharray="283" strokeDashoffset="142" className="progress-circle-value" />
-                    <text x="50" y="45" textAnchor="middle" fill="white" fontSize="22" fontWeight="600">50%</text>
-                    <text x="50" y="65" textAnchor="middle" fill="#aaa" fontSize="12">Utilized</text>
-                  </svg>
-                  <div style={{ marginTop: '15px', color: '#fff', fontSize: '14px', fontWeight: '500' }}>Food</div>
-                </div>
-                <div style={{ textAlign: 'center', minWidth: '150px' }} className="scrollable-item">
-                  <svg width="120" height="120" viewBox="0 0 100 100" className="progress-circle">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#333" strokeWidth="8" />
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#e91e63" strokeWidth="8" strokeDasharray="283" strokeDashoffset="42" className="progress-circle-value" />
-                    <text x="50" y="45" textAnchor="middle" fill="white" fontSize="22" fontWeight="600">85%</text>
-                    <text x="50" y="65" textAnchor="middle" fill="#aaa" fontSize="12">Utilized</text>
-                  </svg>
-                  <div style={{ marginTop: '15px', color: '#fff', fontSize: '14px', fontWeight: '500' }}>Shelter</div>
-                </div>
+                {resourceUtilization.map((resource, index) => {
+                  // Calculate stroke-dashoffset based on utilization percentage
+                  // Circle circumference is 2πr = 2 * π * 45 ≈ 283
+                  const circumference = 2 * Math.PI * 45;
+                  const dashoffset = circumference * (1 - resource.utilization / 100);
+                  
+                  // Assign colors based on resource type
+                  let color;
+                  switch(resource.type) {
+                    case 'Medical': color = '#2196f3'; break;
+                    case 'Transport': color = '#ff9800'; break;
+                    case 'Food': color = '#4caf50'; break;
+                    case 'Shelter': color = '#e91e63'; break;
+                    default: color = '#9c27b0';
+                  }
+                  
+                  return (
+                    <div key={resource.type} style={{ textAlign: 'center', minWidth: '150px' }} className="scrollable-item">
+                      <svg width="120" height="120" viewBox="0 0 100 100" className="progress-circle">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#333" strokeWidth="8" />
+                        <circle 
+                          cx="50" 
+                          cy="50" 
+                          r="45" 
+                          fill="none" 
+                          stroke={color} 
+                          strokeWidth="8" 
+                          strokeDasharray={circumference} 
+                          strokeDashoffset={dashoffset} 
+                          className="progress-circle-value" 
+                        />
+                        <text x="50" y="45" textAnchor="middle" fill="white" fontSize="22" fontWeight="600">{resource.utilization}%</text>
+                        <text x="50" y="65" textAnchor="middle" fill="#aaa" fontSize="12">Utilized</text>
+                      </svg>
+                      <div style={{ marginTop: '15px', color: '#fff', fontSize: '14px', fontWeight: '500' }}>{resource.type}</div>
+                    </div>
+                  );
+                })}
               </div>
               
               <div style={{ background: '#1a1a1a', padding: '15px', borderRadius: '8px' }}>
-                <h3 style={{ color: 'var(--primary)', marginTop: 0, marginBottom: '15px', fontSize: '16px' }}>Resource Allocation Recommendations</h3>
-                <ul style={{ color: '#ddd', paddingLeft: '20px' }}>
-                  <li>Increase medical teams in East Delhi region by 20%</li>
-                  <li>Reallocate transport resources from South to North zone</li>
-                  <li>Request additional shelter facilities from partner NGOs</li>
-                  <li>Optimize food distribution routes to reduce response time</li>
-                </ul>
+                <h3 style={{ color: 'var(--primary)', marginTop: 0, marginBottom: '15px', fontSize: '16px' }}>Nearby Resources</h3>
+                {nearbyResources.length > 0 ? (
+                  <ul style={{ color: '#ddd', paddingLeft: '20px' }}>
+                    {nearbyResources.slice(0, 4).map((resource, index) => (
+                      <li key={resource.id}>
+                        {resource.name || `Volunteer ${resource.id.substring(0, 4)}`} - {resource.distance}km away
+                        {resource.skills && resource.skills.length > 0 && (
+                          <span style={{ color: '#aaa', fontSize: '12px', marginLeft: '5px' }}>
+                            ({resource.skills.join(', ')})
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ color: '#aaa' }}>No nearby resources found</p>
+                )}
+                
+                <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                  <button 
+                    onClick={async () => {
+                      setReportStatus({ generating: true, success: null, message: 'Generating report...' });
+                      try {
+                        const result = await generateReport(emergencies, volunteers, donations);
+                        setReportStatus({ 
+                          generating: false, 
+                          success: result.success, 
+                          message: result.message 
+                        });
+                      } catch (error) {
+                        setReportStatus({ 
+                          generating: false, 
+                          success: false, 
+                          message: 'Error generating report: ' + error.message 
+                        });
+                      }
+                    }} 
+                    disabled={reportStatus.generating}
+                    style={{ 
+                      padding: '8px 15px', 
+                      background: 'var(--primary)', 
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: reportStatus.generating ? 'wait' : 'pointer',
+                      opacity: reportStatus.generating ? 0.7 : 1
+                    }}
+                  >
+                    {reportStatus.generating ? 'Generating...' : 'Generate Report'}
+                  </button>
+                  
+                  {reportStatus.message && (
+                    <div style={{ 
+                      marginTop: '10px', 
+                      padding: '5px', 
+                      color: reportStatus.success ? '#4caf50' : '#e53935',
+                      fontSize: '12px'
+                    }}>
+                      {reportStatus.message}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

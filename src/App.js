@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import EmergencyReport from './components/EmergencyReport';
 import PriorityMap from './components/PriorityMap';
@@ -7,6 +7,12 @@ import Dashboard from './components/Dashboard';
 import ProfilePage from './components/ProfilePage';
 import LoginPage from './components/LoginPage';
 import './App.css';
+import './animations.css';
+import { auth } from './firebase';
+import { onAuthStateChange, getUserProfile } from './services/authService';
+import { subscribeToEmergencies } from './services/emergencyService';
+import { subscribeToVolunteers, subscribeToDonations } from './services/volunteerService';
+
 
 const MenuIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -92,41 +98,110 @@ function App() {
   const [profile, setProfile] = useState(null);
   const [profiles, setProfiles] = useState([]); // store all signed up profiles
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showMenuTooltip, setShowMenuTooltip] = useState(true); // Show tooltip for new users
-  const [showLogoutMessage, setShowLogoutMessage] = useState(false); // For logout message
+  const [showMenuTooltip, setShowMenuTooltip] = useState(true);
+  const [showLogoutMessage, setShowLogoutMessage] = useState(false);
+  const [emergencies, setEmergencies] = useState([]);
+  const [volunteers, setVolunteers] = useState([]);
+  const [donations, setDonations] = useState([])
 
   const handleProfileSignup = (newProfile) => {
-    newProfile.contributions = [
-      { type: 'Food Donation', date: '2025-04-10', details: 'Donated 20 meals to East Delhi' },
-      { type: 'Flood Relief', date: '2025-04-14', details: 'Volunteered at Yamuna Bank' }
-    ];
-    newProfile.reports = [
-      { desc: 'Reported flooding at Yamuna Bank', date: '2025-04-13' }
-    ];
-    setProfiles(prev => [...prev, newProfile]);
     setProfile(newProfile);
   };
+  
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange(async (user) => {
+      if (user) {
+
+        try {
+
+          const userProfile = await getUserProfile(user.uid);
+          setProfile(userProfile);
+          
+
+          if (page === 'login') {
+            setPage('landing');
+          }
+        } catch (error) {
+          console.error('Error getting user profile:', error);
+
+          if (error.message === 'User profile not found' && page !== 'volunteer') {
+            setPage('volunteer');
+          }
+        }
+      } else {
+
+        setProfile(null);
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [page]);
+  
+
+  useEffect(() => {
+    const unsubscribe = subscribeToEmergencies((data) => {
+      setEmergencies(data);
+    });
+    
+    return () => unsubscribe();
+  }, []);
+  
+
+  useEffect(() => {
+    const unsubscribeVolunteers = subscribeToVolunteers((data) => {
+      setVolunteers(data);
+    });
+    
+    const unsubscribeDonations = subscribeToDonations((data) => {
+      setDonations(data);
+    });
+    
+    return () => {
+      unsubscribeVolunteers();
+      unsubscribeDonations();
+    };
+  }, []);
 
   const handleNavigation = (targetPage) => {
-    setPage(targetPage);
+    // Only profile page requires authentication
+    const protectedPages = ['profile'];
+    
+    if (protectedPages.includes(targetPage) && !profile) {
+      // Redirect to login if trying to access protected page without being logged in
+      setPage('login');
+    } else {
+      setPage(targetPage);
+    }
+    
     setSidebarOpen(false);
-    setShowMenuTooltip(false);
+    setShowMenuTooltip(false); // Hide tooltip after navigation
   };
   
-  const handleLogout = () => {
-    setShowLogoutMessage(true);
-    setSidebarOpen(false);
-    
-    setTimeout(() => {
-      setProfile(null);
-      setPage('landing');
-      setShowLogoutMessage(false);
-    }, 2000);
+  const handleLogout = async () => {
+    try {
+      setShowLogoutMessage(true);
+      setSidebarOpen(false);
+      
+      // After showing message, wait 2 seconds then logout
+      setTimeout(async () => {
+        try {
+          await auth.signOut();
+          setProfile(null);
+          setPage('landing');
+          setShowLogoutMessage(false);
+        } catch (error) {
+          console.error('Error signing out:', error);
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
   };
 
   return (
     <div className="app-container">
-      {/* Sidebar Toggle Button with Tooltip */}
+
       <div style={{ position: 'relative' }}>
         <button 
           className={`sidebar-toggle ${!sidebarOpen && 'pulse'}`}
@@ -145,13 +220,13 @@ function App() {
         </button>
       </div>
 
-      {/* Sidebar Overlay */}
+
       <div 
         className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
         onClick={() => setSidebarOpen(false)}
       ></div>
 
-      {/* Sidebar */}
+
       <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="logo">
           <div className="logo-text">Saarthi</div>
@@ -166,9 +241,11 @@ function App() {
           <div className={`nav-link ${page === 'map' ? 'active' : ''}`} onClick={() => handleNavigation('map')}>
             <MapIcon /> <span>Priority Map</span>
           </div>
-          <div className={`nav-link ${page === 'volunteer' ? 'active' : ''}`} onClick={() => handleNavigation('volunteer')}>
-            <VolunteerIcon /> <span>Volunteer/Donate</span>
-          </div>
+          {profile && (
+            <div className={`nav-link ${page === 'volunteer' ? 'active' : ''}`} onClick={() => handleNavigation('volunteer')}>
+              <VolunteerIcon /> <span>Volunteer/Donate</span>
+            </div>
+          )}
           <div className={`nav-link ${page === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavigation('dashboard')}>
             <DashboardIcon /> <span>Dashboard</span>
           </div>
@@ -190,20 +267,24 @@ function App() {
         </nav>
       </div>
 
-      {/* Main Content */}
+
       <div className="main-content">
         <div className="fade-in">
           {page === 'landing' && <LandingPage setPage={handleNavigation} profile={profile} showLogin={true} />}
-          {page === 'report' && <EmergencyReport setPage={handleNavigation} />}
-          {page === 'map' && <PriorityMap setPage={handleNavigation} />}
-          {page === 'volunteer' && <VolunteerSignup setPage={handleNavigation} setProfile={handleProfileSignup} />}
-          {page === 'dashboard' && <Dashboard setPage={handleNavigation} />}
+          {page === 'report' && <EmergencyReport setPage={handleNavigation} profile={profile} />}
+          {page === 'map' && <PriorityMap setPage={handleNavigation} emergencies={emergencies} />}
+          {page === 'volunteer' && profile ? (
+            <VolunteerSignup setPage={handleNavigation} profile={profile} />
+          ) : page === 'volunteer' && !profile ? (
+            <LoginPage setPage={handleNavigation} redirectAfterLogin="volunteer" />
+          ) : null}
+          {page === 'dashboard' && <Dashboard setPage={handleNavigation} profile={profile} emergencies={emergencies} volunteers={volunteers} donations={donations} />}
           {page === 'profile' && <ProfilePage setPage={handleNavigation} profile={profile} />}
-          {page === 'login' && <LoginPage setPage={handleNavigation} setProfile={setProfile} profiles={profiles} />}
+          {page === 'login' && <LoginPage setPage={handleNavigation} />}
         </div>
       </div>
       
-      {/* Logout Message */}
+
       {showLogoutMessage && (
         <div style={{
           position: 'fixed',

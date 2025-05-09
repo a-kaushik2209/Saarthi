@@ -1,6 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import GoogleMapView from './GoogleMapView';
+import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { db } from '../firebase';
 
 function LandingPage({ setPage, profile, showLogin }) {
+  const [recentEmergencies, setRecentEmergencies] = useState([]);
+  const [mapLoading, setMapLoading] = useState(true);
+  
+
+  useEffect(() => {
+    const fetchRecentEmergencies = async () => {
+      try {
+        setMapLoading(true);
+        const emergenciesRef = collection(db, 'emergencies');
+        const q = query(
+          emergenciesRef,
+          orderBy('timestamp', 'desc'),
+          limit(10)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        const emergencies = [];
+        
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.locationDetails && data.locationDetails.coordinates) {
+            emergencies.push({
+              id: doc.id,
+              ...data
+            });
+          }
+        });
+        
+        setRecentEmergencies(emergencies);
+      } catch (error) {
+        console.error('Error fetching emergencies:', error);
+      } finally {
+        setMapLoading(false);
+      }
+    };
+    
+    fetchRecentEmergencies();
+  }, []);
+  // Helper function for section animations
   const sectionStyle = (delay) => ({
     opacity: 0,
     animation: 'fadeIn 1s forwards',
@@ -8,6 +50,7 @@ function LandingPage({ setPage, profile, showLogin }) {
     animationFillMode: 'forwards'
   });
 
+  // Helper function for element animations
   const animateElement = (delay, duration = 0.5) => ({
     opacity: 0,
     transform: 'translateY(20px)',
@@ -18,7 +61,7 @@ function LandingPage({ setPage, profile, showLogin }) {
 
   return (
     <div style={{ padding: '0', overflow: 'hidden' }}>
-      {}
+      {/* Hero Section */}
       <section style={{ 
         position: 'relative',
         padding: '80px 20px', 
@@ -27,7 +70,7 @@ function LandingPage({ setPage, profile, showLogin }) {
         textAlign: 'center',
         overflow: 'hidden'
       }}>
-        {}
+        {/* Background animations */}
         <div className="pulse" style={{ position: 'absolute', top: '10%', right: '5%', width: 300, height: 300, borderRadius: '50%', background: 'rgba(255, 143, 0, 0.03)', zIndex: 0 }}></div>
         <div className="pulse" style={{ position: 'absolute', bottom: '5%', left: '10%', width: 200, height: 200, borderRadius: '50%', background: 'rgba(255, 143, 0, 0.05)', zIndex: 0, animationDelay: '0.5s' }}></div>
         
@@ -90,7 +133,7 @@ function LandingPage({ setPage, profile, showLogin }) {
           </div>
         </div>
         
-        {}
+        {/* Down arrow animation */}
         <div style={{ 
           position: 'absolute', 
           bottom: '20px', 
@@ -167,56 +210,81 @@ function LandingPage({ setPage, profile, showLogin }) {
               <div style={{ 
                 width: '100%', 
                 height: '350px', 
-                background: '#ddd', 
                 borderRadius: '12px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                boxShadow: '0 15px 30px rgba(0,0,0,0.1)',
                 overflow: 'hidden',
-                position: 'relative'
+                position: 'relative',
+                boxShadow: '0 15px 30px rgba(0,0,0,0.3)'
               }}>
-                {/* Placeholder for app screenshot/illustration */}
-                {/* Delhi Map as SVG - directly embedded for reliability */}
-                <svg 
-                  viewBox="0 0 800 600" 
-                  style={{ 
-                    width: '100%', 
-                    height: '100%', 
+                <GoogleMapView 
+                  emergencies={recentEmergencies} 
+                  onMarkerClick={() => {}} 
+                />
+                
+                {mapLoading && (
+                  <div style={{ 
                     position: 'absolute',
                     top: 0,
-                    left: 0
-                  }}
-                >
-                  <path 
-                    d="M400,100 C500,120 550,200 580,300 C600,380 550,450 500,500 C450,550 350,580 250,500 C180,450 150,350 200,250 C250,150 320,90 400,100 Z" 
-                    fill="#252525" 
-                    stroke="var(--primary)" 
-                    strokeWidth="3"
-                  />
-                  <text x="400" y="300" textAnchor="middle" fill="#555" fontSize="24" fontWeight="bold">Delhi</text>
-                  
-                  {/* District boundaries */}
-                  <path d="M350,200 L450,250 L400,350 L300,300 Z" fill="#222" stroke="#444" strokeWidth="1" />
-                  <path d="M450,250 L550,300 L500,400 L400,350 Z" fill="#222" stroke="#444" strokeWidth="1" />
-                  <path d="M400,350 L500,400 L450,500 L350,450 Z" fill="#222" stroke="#444" strokeWidth="1" />
-                  <path d="M300,300 L400,350 L350,450 L250,400 Z" fill="#222" stroke="#444" strokeWidth="1" />
-                  
-                  {/* Rivers */}
-                  <path d="M300,150 C350,200 400,250 380,350 C360,450 300,500 250,550" fill="none" stroke="#334" strokeWidth="5" opacity="0.6" />
-                  
-                  {/* Main roads */}
-                  <path d="M250,300 L550,300" fill="none" stroke="#444" strokeWidth="2" />
-                  <path d="M400,150 L400,450" fill="none" stroke="#444" strokeWidth="2" />
-                  
-                  {/* Sample markers */}
-                  <circle cx="400" cy="250" r="8" fill="#e53935" />
-                  <circle cx="300" cy="350" r="8" fill="#fb8c00" />
-                  <circle cx="500" cy="350" r="8" fill="#4caf50" />
-                </svg>
+                    left: 0,
+                    width: '100%', 
+                    height: '100%', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    background: 'rgba(37, 37, 37, 0.7)',
+                    color: 'white',
+                    zIndex: 5
+                  }}>
+                    <div>
+                      <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="loading-spinner">
+                          <line x1="12" y1="2" x2="12" y2="6"></line>
+                          <line x1="12" y1="18" x2="12" y2="22"></line>
+                          <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                          <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                          <line x1="2" y1="12" x2="6" y2="12"></line>
+                          <line x1="18" y1="12" x2="22" y2="12"></line>
+                          <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                          <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                        </svg>
+                      </div>
+                      <div>Loading map...</div>
+                    </div>
+                  </div>
+                )}
                 
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ color: 'white', fontSize: '1.5rem', fontWeight: 700 }}>Priority Map View</span>
+                {recentEmergencies.length === 0 && !mapLoading && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '40px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'rgba(37, 37, 37, 0.85)',
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    color: '#ccc',
+                    textAlign: 'center',
+                    zIndex: 10,
+                    maxWidth: '80%',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.3)'
+                  }}>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Map shows your current location</p>
+                  </div>
+                )}
+                
+                <div style={{ 
+                  position: 'absolute', 
+                  top: 0, 
+                  left: 0, 
+                  right: 0, 
+                  padding: '10px', 
+                  background: 'rgba(0,0,0,0.6)', 
+                  color: 'white',
+                  fontSize: '1.2rem', 
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  zIndex: 10
+                }}>
+                  Live Emergency Map
                 </div>
               </div>
             </div>
@@ -381,7 +449,7 @@ function LandingPage({ setPage, profile, showLogin }) {
       </section>
 
       {/* Footer */}
-      <footer style={{ padding: '40px 20px', background: 'var(--dark)', color: 'white', textAlign: 'center' }}>
+      <footer style={{ padding: '16px 10px', background: 'var(--dark)', color: 'white', textAlign: 'center' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ 
             fontSize: '1.8rem', 
@@ -397,7 +465,7 @@ function LandingPage({ setPage, profile, showLogin }) {
           
           <p style={{ opacity: 0.7, marginBottom: 20 }}>Delhi's Unified Emergency Response System</p>
           
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: 30, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: 10, flexWrap: 'wrap' }}>
             <a href="#" style={{ color: 'white', opacity: 0.7, textDecoration: 'none' }}>About</a>
             <a href="#" style={{ color: 'white', opacity: 0.7, textDecoration: 'none' }}>Contact</a>
             <a href="#" style={{ color: 'white', opacity: 0.7, textDecoration: 'none' }}>Privacy Policy</a>

@@ -1,7 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { auth } from '../firebase';
 
 function ProfilePage({ setPage, profile }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [displayName, setDisplayName] = useState('');
+  
+
+  const [userInfo, setUserInfo] = useState({
+    email: '',
+    createdAt: '',
+    lastLogin: ''
+  });
+
+
+  useEffect(() => {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+
+      if (currentUser.displayName) {
+        setDisplayName(currentUser.displayName);
+      } else if (profile && profile.displayName) {
+        setDisplayName(profile.displayName);
+      } else if (profile && profile.name) {
+        setDisplayName(profile.name);
+      }
+      
+
+      setUserInfo({
+        email: currentUser.email || profile?.email || '',
+        createdAt: currentUser.metadata?.creationTime ? new Date(currentUser.metadata.creationTime).toLocaleDateString() : '',
+        lastLogin: currentUser.metadata?.lastSignInTime ? new Date(currentUser.metadata.lastSignInTime).toLocaleDateString() : ''
+      });
+    }
+  }, [profile]);
   
   if (!profile) {
     return (
@@ -37,7 +68,7 @@ function ProfilePage({ setPage, profile }) {
   
   return (
     <div className="fade-in" style={{ maxWidth: 800, margin: '1rem auto' }}>
-      {/* Profile Header */}
+
       <div className="card" style={{ padding: '30px', marginBottom: '20px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ 
           position: 'absolute', 
@@ -62,11 +93,11 @@ function ProfilePage({ setPage, profile }) {
             fontSize: '30px',
             border: '2px solid var(--primary)'
           }}>
-            {profile.name.charAt(0).toUpperCase()}
+            {displayName ? displayName.charAt(0).toUpperCase() : '👤'}
           </div>
           
           <div>
-            <h2 style={{ margin: '0', color: 'var(--primary)' }}>{profile.name}</h2>
+            <h2 style={{ margin: '0', color: 'var(--primary)' }}>{displayName || 'User'}</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '5px' }}>
               <span style={{ 
                 background: '#252525', 
@@ -75,15 +106,15 @@ function ProfilePage({ setPage, profile }) {
                 fontSize: '14px',
                 color: '#ddd'
               }}>
-                {profile.role}
+                {profile.role || 'Volunteer'}
               </span>
-              <span style={{ color: '#aaa', fontSize: '14px' }}>ID: {profile.id}</span>
+              <span style={{ color: '#aaa', fontSize: '14px' }}>ID: {profile.id || profile.uid || 'Unknown'}</span>
             </div>
           </div>
         </div>
       </div>
       
-      {/* Profile Tabs */}
+
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
         <button 
           onClick={() => setActiveTab('overview')} 
@@ -129,7 +160,7 @@ function ProfilePage({ setPage, profile }) {
         </button>
       </div>
       
-      {/* Tab Content */}
+
       <div className="card" style={{ padding: '30px' }}>
         {activeTab === 'overview' && (
           <div className="fade-in">
@@ -146,19 +177,19 @@ function ProfilePage({ setPage, profile }) {
             }}>
               <div>
                 <div style={{ color: '#aaa', fontSize: '14px' }}>Name</div>
-                <div style={{ fontSize: '16px', marginTop: '5px' }}>{profile.name}</div>
+                <div style={{ fontSize: '16px', marginTop: '5px', color: 'var(--primary)', fontWeight: 'bold' }}>{displayName || 'User'}</div>
               </div>
               <div>
                 <div style={{ color: '#aaa', fontSize: '14px' }}>Role</div>
-                <div style={{ fontSize: '16px', marginTop: '5px' }}>{profile.role}</div>
+                <div style={{ fontSize: '16px', marginTop: '5px' }}>{profile.role || 'Volunteer'}</div>
               </div>
               <div>
                 <div style={{ color: '#aaa', fontSize: '14px' }}>User ID</div>
-                <div style={{ fontSize: '16px', marginTop: '5px' }}>{profile.id}</div>
+                <div style={{ fontSize: '16px', marginTop: '5px', fontFamily: 'monospace' }}>{profile.uid || auth.currentUser?.uid || 'Unknown'}</div>
               </div>
               <div>
-                <div style={{ color: '#aaa', fontSize: '14px' }}>Password</div>
-                <div style={{ fontSize: '16px', marginTop: '5px', letterSpacing: '2px' }}>••••••••</div>
+                <div style={{ color: '#aaa', fontSize: '14px' }}>Email</div>
+                <div style={{ fontSize: '16px', marginTop: '5px', fontFamily: 'monospace' }}>{userInfo.email || 'Not available'}</div>
               </div>
             </div>
             
@@ -176,6 +207,25 @@ function ProfilePage({ setPage, profile }) {
                   {profile.reports ? profile.reports.length : 0}
                 </div>
                 <div style={{ color: '#aaa', fontSize: '14px', marginTop: '5px' }}>Emergency reports</div>
+              </div>
+            </div>
+            
+            <div style={{ 
+              background: '#252525', 
+              padding: '20px', 
+              borderRadius: '8px', 
+              marginBottom: '20px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '20px'
+            }}>
+              <div>
+                <div style={{ color: '#aaa', fontSize: '14px' }}>Account Created</div>
+                <div style={{ fontSize: '16px', marginTop: '5px' }}>{userInfo.createdAt || 'Not available'}</div>
+              </div>
+              <div>
+                <div style={{ color: '#aaa', fontSize: '14px' }}>Last Login</div>
+                <div style={{ fontSize: '16px', marginTop: '5px' }}>{userInfo.lastLogin || 'Not available'}</div>
               </div>
             </div>
             
@@ -205,7 +255,7 @@ function ProfilePage({ setPage, profile }) {
           <div className="fade-in">
             <h3 style={{ color: 'var(--primary)', marginTop: 0 }}>Your Contributions</h3>
             
-            {profile.contributions && profile.contributions.length > 0 ? (
+            {profile.contributions && Array.isArray(profile.contributions) && profile.contributions.length > 0 ? (
               <div>
                 {profile.contributions.map((c, i) => (
                   <div 
@@ -273,7 +323,7 @@ function ProfilePage({ setPage, profile }) {
           <div className="fade-in">
             <h3 style={{ color: 'var(--primary)', marginTop: 0 }}>Your Emergency Reports</h3>
             
-            {profile.reports && profile.reports.length > 0 ? (
+            {profile.reports && Array.isArray(profile.reports) && profile.reports.length > 0 ? (
               <div>
                 {profile.reports.map((r, i) => (
                   <div 

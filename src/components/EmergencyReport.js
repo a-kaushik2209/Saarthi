@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { addEmergencyReport } from '../services/emergencyService';
+import { getHighAccuracyPosition, getAddressFromCoords, getCachedGeocodingResult } from '../services/locationService';
 
-function EmergencyReport({ setPage }) {
+function EmergencyReport({ setPage, profile }) {
   const [location, setLocation] = useState('');
   const [desc, setDesc] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -8,69 +10,104 @@ function EmergencyReport({ setPage }) {
   const [locLoading, setLocLoading] = useState(false);
   const [locError, setLocError] = useState('');
 
-  const getAddressFromCoords = async (lat, lng) => {
-    try {
-      const mockAddresses = {
-        north: 'Rohini Sector 9, Delhi - 110085',
-        south: 'Saket District Centre, Delhi - 110017',
-        east: 'Laxmi Nagar, Delhi - 110092',
-        west: 'Janakpuri District Centre, Delhi - 110058',
-        central: 'Connaught Place, New Delhi - 110001'
-      };
-      
-      let area;
-      if (lat > 28.65) area = 'north';
-      else if (lat < 28.55) area = 'south';
-      else if (lng > 77.25) area = 'east';
-      else if (lng < 77.15) area = 'west';
-      else area = 'central';
-      
-      return {
-        formattedAddress: mockAddresses[area],
-        coords: { lat, lng }
-      };
-    } catch (error) {
-      console.error('Error getting address:', error);
-      return null;
-    }
-  };
+
+  const [locationData, setLocationData] = useState(null);
 
   useEffect(() => {
-    setLocLoading(true);
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          
-          const coordsString = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-          
-          const addressData = await getAddressFromCoords(lat, lng);
-          
-          if (addressData) {
-            setLocation(addressData.formattedAddress);
-          } else {
-            setLocation(coordsString);
-          }
-          
-          setAutoLoc(true);
-          setLocLoading(false);
-        },
-        (err) => {
-          setLocError('Could not detect location. Please enter manually.');
-          setLocLoading(false);
+    const detectLocation = async () => {
+      setLocLoading(true);
+      try {
+
+        const position = await getHighAccuracyPosition();
+        const lat = position.latitude;
+        const lng = position.longitude;
+        
+
+        const coordsString = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        
+
+        let addressData = await getCachedGeocodingResult(lat, lng);
+        
+
+        if (!addressData) {
+          addressData = await getAddressFromCoords(lat, lng);
         }
-      );
-    } else {
-      setLocError('Geolocation not supported. Please enter location manually.');
-      setLocLoading(false);
-    }
+        
+        if (addressData) {
+          setLocation(addressData.formattedAddress);
+          setLocationData(addressData);
+          
+
+          console.log(`Location detected with confidence: ${addressData.confidence}/10`);
+          if (addressData.cached) {
+            console.log('Using cached location data');
+          }
+        } else {
+          setLocation(coordsString);
+        }
+        
+        setAutoLoc(true);
+      } catch (error) {
+        console.error('Error detecting location:', error);
+        setLocError(
+          error.code === 1 
+            ? 'Location access denied. Please enable location services or enter manually.' 
+            : 'Could not detect location. Please enter manually.'
+        );
+      } finally {
+        setLocLoading(false);
+      }
+    };
+    
+    detectLocation();
   }, []);
 
-  const handleSubmit = e => {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => setPage('landing'), 2000);
+    setSubmitting(true);
+    setError('');
+    
+    try {
+      if (!location || !desc) {
+        throw new Error('Please provide both location and description');
+      }
+      
+      // Create emergency report data with enhanced location information
+      const reportData = {
+        location,
+        description: desc,
+        userId: profile ? profile.uid : 'anonymous',
+        userName: profile ? profile.displayName : 'Anonymous User',
+        severity: 'high', // Default severity
+        type: 'general', // Default type
+        status: 'pending',
+        autoDetectedLocation: autoLoc,
+        // Add detailed location data if available
+        locationDetails: locationData ? {
+          coordinates: locationData.coords,
+          components: locationData.components,
+          confidence: locationData.confidence
+        } : null,
+        createdAt: new Date()
+      };
+      
+      // Add to Firebase
+      await addEmergencyReport(reportData);
+      
+      // Show success message
+      setSubmitted(true);
+      
+      // Redirect after delay
+      setTimeout(() => setPage('landing'), 2000);
+    } catch (error) {
+      console.error('Error submitting emergency report:', error);
+      setError(error.message || 'Failed to submit emergency report. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -136,6 +173,7 @@ function EmergencyReport({ setPage }) {
                 onChange={e => {
                   setLocation(e.target.value);
                   setAutoLoc(false);
+                  setLocationData(null); // Clear detailed location data when manually editing
                 }}
                 placeholder="Enter location"
                 required
@@ -186,7 +224,23 @@ function EmergencyReport({ setPage }) {
               </div>
             )}
             {locError && <div style={{ fontSize: 14, color: '#e53935', marginTop: '8px' }}>{locError}</div>}
-            {autoLoc && <div style={{ fontSize: 14, color: 'var(--primary)', marginTop: '8px' }}>✓ Address detected automatically</div>}
+            {autoLoc && (
+              <div style={{ fontSize: 14, color: 'var(--primary)', marginTop: '8px' }}>
+                ✓ Address detected automatically
+                {locationData && locationData.confidence && (
+                  <span style={{ marginLeft: '5px', fontSize: '12px', color: '#aaa' }}>
+                    (Accuracy: {locationData.confidence}/10)
+                  </span>
+                )}
+              </div>
+            )}
+            {autoLoc && locationData && locationData.components && (
+              <div style={{ fontSize: 12, color: '#aaa', marginTop: '4px' }}>
+                {locationData.components.neighbourhood && `${locationData.components.neighbourhood}, `}
+                {locationData.components.city || locationData.components.state_district || ''}
+                {locationData.components.postcode && ` - ${locationData.components.postcode}`}
+              </div>
+            )}
           </div>
           <div style={{ marginBottom: '1.3rem' }}>
             <label style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
@@ -210,8 +264,21 @@ function EmergencyReport({ setPage }) {
               }}
             />  
           </div>
+          {error && (
+            <div style={{ 
+              color: '#e53935', 
+              marginBottom: '15px', 
+              background: 'rgba(229, 57, 53, 0.1)', 
+              padding: '10px', 
+              borderRadius: '4px',
+              border: '1px solid rgba(229, 57, 53, 0.3)'
+            }}>
+              {error}
+            </div>
+          )}
           <button 
             type="submit" 
+            disabled={submitting}
             style={{ 
               width: '100%', 
               fontWeight: 700, 
@@ -221,7 +288,7 @@ function EmergencyReport({ setPage }) {
               padding: '12px',
               borderRadius: '8px',
               color: '#000',
-              cursor: 'pointer',
+              cursor: submitting ? 'wait' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -229,7 +296,8 @@ function EmergencyReport({ setPage }) {
               transition: 'all 0.3s',
               boxShadow: '0 4px 12px rgba(255, 153, 0, 0.3)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              opacity: submitting ? 0.7 : 1
             }}
             className="glow-hover"
           >
