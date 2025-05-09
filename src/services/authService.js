@@ -3,7 +3,9 @@ import {
   signInWithEmailAndPassword, 
   signOut,
   updateProfile,
-  onAuthStateChanged
+  onAuthStateChanged,
+  browserSessionPersistence,
+  setPersistence
 } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -36,9 +38,15 @@ export const registerUser = async (email, password, displayName) => {
 
 export const loginUser = async (email, password) => {
   try {
+    // Ensure we're using session persistence for this login
+    await setPersistence(auth, browserSessionPersistence);
+    
+    // Then sign in the user
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    console.log('User logged in with session persistence');
     return userCredential.user;
   } catch (error) {
+    console.error('Login error:', error);
     throw error;
   }
 };

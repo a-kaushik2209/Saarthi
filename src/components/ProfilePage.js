@@ -106,7 +106,7 @@ function ProfilePage({ setPage, profile }) {
                 fontSize: '14px',
                 color: '#ddd'
               }}>
-                {profile.role || 'Volunteer'}
+                {profile.role || 'User'}
               </span>
               <span style={{ color: '#aaa', fontSize: '14px' }}>ID: {profile.id || profile.uid || 'Unknown'}</span>
             </div>
@@ -181,7 +181,7 @@ function ProfilePage({ setPage, profile }) {
               </div>
               <div>
                 <div style={{ color: '#aaa', fontSize: '14px' }}>Role</div>
-                <div style={{ fontSize: '16px', marginTop: '5px' }}>{profile.role || 'Volunteer'}</div>
+                <div style={{ fontSize: '16px', marginTop: '5px' }}>{profile.role || 'User'}</div>
               </div>
               <div>
                 <div style={{ color: '#aaa', fontSize: '14px' }}>User ID</div>
@@ -253,7 +253,31 @@ function ProfilePage({ setPage, profile }) {
         
         {activeTab === 'contributions' && (
           <div className="fade-in">
-            <h3 style={{ color: 'var(--primary)', marginTop: 0 }}>Your Contributions</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3 style={{ color: 'var(--primary)', marginTop: 0, marginBottom: 0 }}>Your Contributions</h3>
+              <button 
+                onClick={() => setPage('contribution')} 
+                style={{ 
+                  background: 'var(--primary)',
+                  color: 'black',
+                  border: 'none',
+                  padding: '8px 15px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="16"></line>
+                  <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+                Record Contribution
+              </button>
+            </div>
             
             {profile.contributions && Array.isArray(profile.contributions) && profile.contributions.length > 0 ? (
               <div>

@@ -90,7 +90,7 @@ function LandingPage({ setPage, profile, showLogin }) {
           }}>Saarthi</h1>
           
           <div style={{ fontWeight: 600, fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', marginBottom: 30, opacity: 0.9, animation: 'slideUpFade 1s ease-out 0.2s forwards', opacity: 0 }}>
-            Delhi's Unified Emergency Response System
+            India's Unified Emergency Response System
           </div>
           
           <p style={{ fontSize: '1.2rem', margin: '0 auto 40px', lineHeight: 1.7, maxWidth: 700, opacity: 0, animation: 'slideUpFade 1s ease-out 0.4s forwards' }}>
@@ -358,7 +358,7 @@ function LandingPage({ setPage, profile, showLogin }) {
       }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{ marginBottom: 60, fontSize: '2.5rem', fontWeight: 800 }}>
-            Making <span style={{ color: 'var(--primary)' }}>Delhi</span> Safer
+            Making <span style={{ color: 'var(--primary)' }}>India</span> Safer
           </h2>
           
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '40px' }}>
@@ -389,7 +389,7 @@ function LandingPage({ setPage, profile, showLogin }) {
       <section style={{ padding: '80px 20px', background: '#181818', ...sectionStyle(0.9) }} className="cta-section">
         <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{ marginBottom: 20, fontSize: '2.5rem', fontWeight: 800 }}>Ready to Help?</h2>
-          <p style={{ fontSize: '1.2rem', color: '#ccc', marginBottom: 40, lineHeight: 1.6 }}>Join our network of volunteers and be part of Delhi's emergency response system.</p>
+          <p style={{ fontSize: '1.2rem', color: '#ccc', marginBottom: 40, lineHeight: 1.6 }}>Join our network of volunteers and be part of India's emergency response system.</p>
           
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '20px' }}>
             <button 
@@ -463,7 +463,7 @@ function LandingPage({ setPage, profile, showLogin }) {
             display: 'inline-block'
           }}>Saarthi</div>
           
-          <p style={{ opacity: 0.7, marginBottom: 20 }}>Delhi's Unified Emergency Response System</p>
+          <p style={{ opacity: 0.7, marginBottom: 20 }}>India's Unified Emergency Response System</p>
           
           <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: 10, flexWrap: 'wrap' }}>
             <a href="#" style={{ color: 'white', opacity: 0.7, textDecoration: 'none' }}>About</a>

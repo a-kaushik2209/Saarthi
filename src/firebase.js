@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, browserSessionPersistence, setPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -17,6 +17,17 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+
+// Set session persistence instead of default localStorage persistence
+// This ensures each browser window/tab has its own independent session
+setPersistence(auth, browserSessionPersistence)
+  .then(() => {
+    console.log('Firebase auth persistence set to browserSessionPersistence');
+  })
+  .catch((error) => {
+    console.error('Error setting auth persistence:', error);
+  });
+
 const db = getFirestore(app);
 
 

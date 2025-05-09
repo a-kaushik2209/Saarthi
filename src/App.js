@@ -3,6 +3,7 @@ import LandingPage from './components/LandingPage';
 import EmergencyReport from './components/EmergencyReport';
 import PriorityMap from './components/PriorityMap';
 import VolunteerSignup from './components/VolunteerSignup';
+import VolunteerContribution from './components/VolunteerContribution';
 import Dashboard from './components/Dashboard';
 import ProfilePage from './components/ProfilePage';
 import LoginPage from './components/LoginPage';
@@ -109,34 +110,46 @@ function App() {
   };
   
 
+  // Store current page for navigation after auth changes
+  const [currentAuthPage, setCurrentAuthPage] = useState(null);
+  
+  // Update currentAuthPage whenever page changes
   useEffect(() => {
+    setCurrentAuthPage(page);
+  }, [page]);
+  
+  // Auth state listener - only runs once on component mount
+  useEffect(() => {
+    console.log('Setting up auth state listener');
     const unsubscribe = onAuthStateChange(async (user) => {
       if (user) {
-
         try {
-
+          console.log('User authenticated, fetching profile');
           const userProfile = await getUserProfile(user.uid);
           setProfile(userProfile);
           
-
-          if (page === 'login') {
+          // Use the stored page value for navigation decisions
+          if (currentAuthPage === 'login') {
             setPage('landing');
           }
         } catch (error) {
           console.error('Error getting user profile:', error);
 
-          if (error.message === 'User profile not found' && page !== 'volunteer') {
+          if (error.message === 'User profile not found' && currentAuthPage !== 'volunteer') {
             setPage('volunteer');
           }
         }
       } else {
-
+        console.log('No user authenticated');
         setProfile(null);
       }
     });
     
-    return () => unsubscribe();
-  }, [page]);
+    return () => {
+      console.log('Cleaning up auth state listener');
+      unsubscribe();
+    };
+  }, []); // Empty dependency array - only runs once on mount
   
 
   useEffect(() => {
@@ -277,6 +290,11 @@ function App() {
             <VolunteerSignup setPage={handleNavigation} profile={profile} />
           ) : page === 'volunteer' && !profile ? (
             <LoginPage setPage={handleNavigation} redirectAfterLogin="volunteer" />
+          ) : null}
+          {page === 'contribution' && profile ? (
+            <VolunteerContribution setPage={handleNavigation} profile={profile} />
+          ) : page === 'contribution' && !profile ? (
+            <LoginPage setPage={handleNavigation} redirectAfterLogin="contribution" />
           ) : null}
           {page === 'dashboard' && <Dashboard setPage={handleNavigation} profile={profile} emergencies={emergencies} volunteers={volunteers} donations={donations} />}
           {page === 'profile' && <ProfilePage setPage={handleNavigation} profile={profile} />}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './Dashboard.css';
 import PriorityMap from './PriorityMap';
 import { updateEmergencyStatus } from '../services/emergencyService';
-import { generateReport, getNearbyResources } from '../services/reportService';
+import { generateReport } from '../services/reportService';
 import { calculateDistance } from '../services/locationService';
 
 function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
@@ -22,7 +22,6 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
   const [resourceUtilization, setResourceUtilization] = useState([]);
   
 
-  const [nearbyResources, setNearbyResources] = useState([]);
   
 
   const [reportStatus, setReportStatus] = useState({
@@ -31,7 +30,7 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
     message: ''
   });
   
-  // Calculate stats based on real-time data
+
   const [stats, setStats] = useState([
     { id: 1, title: 'Active Incidents', value: 0, change: '0%', positive: false },
     { id: 2, title: 'Volunteers Active', value: 0, change: '0%', positive: true },
@@ -39,14 +38,14 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
     { id: 4, title: 'People Assisted', value: 0, change: '0%', positive: true }
   ]);
   
-  // Calculate incidents by type
+
   useEffect(() => {
     if (emergencies && emergencies.length > 0) {
-      // Count emergencies by type
+
       const typeCount = {};
       
       emergencies.forEach(emergency => {
-        // Extract type from description or use default types
+
         let type = 'Other';
         
         if (emergency.type) {
@@ -68,15 +67,14 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
       const typesArray = Object.entries(typeCount).map(([type, count]) => ({ type, count }));
       typesArray.sort((a, b) => b.count - a.count);
       
-      // Take top 5 types
       setIncidentsByType(typesArray.slice(0, 5));
     }
   }, [emergencies]);
   
-  // Calculate resource utilization
+
   useEffect(() => {
     if (emergencies && volunteers && donations) {
-      // Calculate medical resources
+
       const medicalEmergencies = emergencies.filter(e => 
         e.type === 'Medical' || 
         (e.description && e.description.toLowerCase().includes('medical'))
@@ -87,7 +85,7 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
       const medicalUtilization = medicalVolunteers > 0 ? 
         Math.min(100, Math.round((medicalEmergencies / medicalVolunteers) * 100)) : 75;
       
-      // Calculate transport resources
+
       const transportEmergencies = emergencies.filter(e => 
         e.type === 'Transport' || 
         (e.description && e.description.toLowerCase().includes('transport'))
@@ -98,7 +96,7 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
       const transportUtilization = transportVolunteers > 0 ? 
         Math.min(100, Math.round((transportEmergencies / transportVolunteers) * 100)) : 60;
       
-      // Calculate food resources
+
       const foodEmergencies = emergencies.filter(e => 
         e.type === 'Food' || 
         (e.description && e.description.toLowerCase().includes('food'))
@@ -107,7 +105,7 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
       const foodUtilization = foodDonations > 0 ? 
         Math.min(100, Math.round((foodEmergencies / foodDonations) * 100)) : 50;
       
-      // Calculate shelter resources
+
       const shelterEmergencies = emergencies.filter(e => 
         e.type === 'Shelter' || 
         (e.description && e.description.toLowerCase().includes('shelter'))
@@ -125,43 +123,20 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
     }
   }, [emergencies, volunteers, donations]);
   
-  // Fetch nearby resources when an emergency is selected
-  useEffect(() => {
-    const fetchNearbyResources = async () => {
-      if (emergencies && emergencies.length > 0) {
-        // Get the most recent high priority emergency
-        const highPriorityEmergencies = emergencies.filter(e => e.severity === 'high' && e.status === 'pending');
-        
-        if (highPriorityEmergencies.length > 0) {
-          const emergency = highPriorityEmergencies[0];
-          
-          if (emergency.locationDetails?.coordinates) {
-            const { lat, lng } = emergency.locationDetails.coordinates;
-            const resources = await getNearbyResources(lat, lng, 10); // 10km radius
-            setNearbyResources(resources);
-          }
-        }
-      }
-    };
-    
-    fetchNearbyResources();
-  }, [emergencies]);
+
   
-  // Calculate response time trend data from emergencies
+
   useEffect(() => {
     if (emergencies && emergencies.length > 0) {
-      // Sort emergencies by date
       const sortedEmergencies = [...emergencies].sort((a, b) => {
         const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
         const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
         return dateA - dateB;
       });
       
-      // Group emergencies by date
       const emergenciesByDate = {};
       const now = new Date();
       
-      // Create 7 days of data
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
@@ -169,7 +144,6 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
         emergenciesByDate[dateStr] = [];
       }
       
-      // Add emergencies to their respective dates
       sortedEmergencies.forEach(emergency => {
         const date = emergency.createdAt?.toDate ? 
           emergency.createdAt.toDate() : 
@@ -181,23 +155,17 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
         }
       });
       
-      // Calculate average response time for each date
-      // Response time is simulated based on severity and status
       const dates = Object.keys(emergenciesByDate).sort();
       const responseTimes = dates.map(date => {
         const dayEmergencies = emergenciesByDate[date];
-        if (dayEmergencies.length === 0) return 45; // Default 45 minutes if no emergencies
-        
-        // Calculate simulated response time based on severity and status
+        if (dayEmergencies.length === 0) return 45; 
         let totalTime = 0;
         dayEmergencies.forEach(emergency => {
           let baseTime = 0;
-          // High severity gets faster response
           if (emergency.severity === 'high') baseTime = 15;
           else if (emergency.severity === 'mid') baseTime = 30;
           else baseTime = 45;
           
-          // Adjust based on status - resolved emergencies had faster response times
           if (emergency.status === 'resolved') baseTime *= 0.8;
           else if (emergency.status === 'inProgress') baseTime *= 0.9;
           
@@ -207,17 +175,14 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
         return Math.round(totalTime / dayEmergencies.length);
       });
       
-      // Format dates for display
       const formattedDates = dates.map(date => {
         const d = new Date(date);
         return `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
       });
       
-      // Calculate SVG points for the polyline
-      const maxTime = Math.max(...responseTimes, 60); // Max of actual times or 60 minutes
       const points = responseTimes.map((time, index) => {
-        const x = index * (300 / (dates.length - 1)); // Spread points across 300px width
-        const y = (time / maxTime) * 140; // Scale to 140px height (170 - 30 for padding)
+        const x = index * (300 / (dates.length - 1)); 
+        const y = (time / Math.max(...responseTimes, 60)) * 140; 
         return `${x},${y}`;
       }).join(' ');
       
@@ -229,12 +194,11 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
     }
   }, [emergencies]);
   
-  // Update stats when real-time data changes
   useEffect(() => {
     if (emergencies && volunteers && donations) {
       const activeIncidents = emergencies.filter(e => e.status === 'pending' || e.status === 'inProgress').length;
       const activeVolunteers = volunteers.filter(v => v.status === 'active').length;
-      const resourcesDeployed = Math.floor(donations.length * 0.7); // Approximate based on donations
+      const resourcesDeployed = Math.floor(donations.length * 0.7); 
       const peopleAssisted = Math.floor(donations.reduce((sum, donation) => sum + (donation.amount || 0), 0) / 100);
       
       setStats([
@@ -246,16 +210,13 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
     }
   }, [emergencies, volunteers, donations]);
 
-  // Map emergencies to incidents format for display
   const [incidents, setIncidents] = useState([]);
   
   useEffect(() => {
     if (emergencies && emergencies.length > 0) {
       const formattedIncidents = emergencies.map(emergency => {
-        // Format the timestamp if it exists
         let reportedTime = 'Unknown';
         if (emergency.createdAt) {
-          // Firebase timestamps can be converted to JS Date
           const date = emergency.createdAt.toDate ? 
             emergency.createdAt.toDate() : 
             new Date(emergency.createdAt);
@@ -394,7 +355,7 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
         </button>
       </div>
 
-      {}
+
       {activeTab === 'overview' && (
         <div className="fade-in">
           <h3 className="section-title">Key Statistics <span className="scroll-hint">(scroll →)</span></h3>
@@ -452,7 +413,7 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
             <div className="card-body">
               <div className="chart-container">
                 <div className="chart-content scrollable-container" style={{ display: 'flex', alignItems: 'center', overflowX: 'auto' }}>
-                  {}
+            
                   <div style={{ textAlign: 'center', minWidth: '100px', margin: '0 10px' }} className="scrollable-item">
                     <div style={{ height: '150px', width: '20px', background: 'linear-gradient(to top, #2196f3, #64b5f6)', borderRadius: '10px', display: 'inline-block', marginBottom: '10px' }}></div>
                     <div>Medical</div>
@@ -608,7 +569,7 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
         </div>
       )}
 
-      {}
+
       {activeTab === 'map' && (
         <div className="fade-in">
           <div className="card">
@@ -616,8 +577,20 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
               <h2 className="card-title">Emergency Map View</h2>
             </div>
             <div className="card-body" style={{ padding: '15px' }}>
-              {}
-              <PriorityMap />
+
+              <PriorityMap emergencies={emergencies.filter(emergency => {
+
+                if (filters.priority !== 'all' && emergency.severity !== filters.priority) {
+                  return false;
+                }
+                
+
+                if (filters.status !== 'all' && emergency.status !== filters.status) {
+                  return false;
+                }
+                
+                return true;
+              })} />
               
               <div className="map-filters" style={{ marginTop: '30px' }}>
                 <div className="filter-group">
@@ -683,65 +656,11 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
             </div>
           </div>
           
-          <div className="card">
-            <div className="card-header">
-              <h2 className="card-title">Nearby Resources</h2>
-            </div>
-            <div className="card-body">
-              <div style={{ overflowX: 'auto' }}>
-                <table className="incidents-table">
-                <thead>
-                  <tr>
-                    <th>Resource Type</th>
-                    <th>Location</th>
-                    <th>Distance</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Medical Team</td>
-                    <td>AIIMS Hospital</td>
-                    <td>2.3 km</td>
-                    <td>Available</td>
-                    <td>
-                      <button style={{ background: 'var(--primary)', border: 'none', padding: '5px 10px', borderRadius: '4px', color: 'white', cursor: 'pointer' }}>
-                        Deploy
-                      </button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Fire Brigade</td>
-                    <td>Central Fire Station</td>
-                    <td>4.1 km</td>
-                    <td>Available</td>
-                    <td>
-                      <button style={{ background: 'var(--primary)', border: 'none', padding: '5px 10px', borderRadius: '4px', color: 'white', cursor: 'pointer' }}>
-                        Deploy
-                      </button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Rescue Team</td>
-                    <td>Civil Defense HQ</td>
-                    <td>3.7 km</td>
-                    <td>Busy</td>
-                    <td>
-                      <button style={{ background: '#555', border: 'none', padding: '5px 10px', borderRadius: '4px', color: 'white', cursor: 'pointer' }}>
-                        Request
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              </div>
-            </div>
-          </div>
+
         </div>
       )}
 
-      {}
+
       {activeTab === 'analytics' && (
         <div className="fade-in">
           <h3 className="section-title">Performance Metrics <span className="scroll-hint">(scroll →)</span></h3>
@@ -751,11 +670,11 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
               <div className="chart-content scrollable-container" style={{ display: 'flex', alignItems: 'flex-end', height: '220px' }}>
                 {incidentsByType.length > 0 ? (
                   incidentsByType.map((item, index) => {
-                    // Calculate height based on count relative to max count
+
                     const maxCount = Math.max(...incidentsByType.map(i => i.count));
                     const height = Math.max(40, Math.round((item.count / maxCount) * 180));
                     
-                    // Assign colors based on index
+
                     const colors = [
                       { bg: 'linear-gradient(to top, #2196f3, #64b5f6)', shadow: 'rgba(33, 150, 243, 0.5)' },
                       { bg: 'linear-gradient(to top, #ff9800, #ffb74d)', shadow: 'rgba(255, 152, 0, 0.5)' },
@@ -794,32 +713,30 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
               <div className="chart-content scrollable-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {responseTrendData.dates.length > 0 ? (
                   <svg width="100%" height="180" viewBox="0 0 300 180">
-                    {/* Grid lines */}
+
                     <line x1="0" y1="40" x2="300" y2="40" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
                     <line x1="0" y1="80" x2="300" y2="80" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
                     <line x1="0" y1="120" x2="300" y2="120" style={{ stroke: '#333', strokeWidth: 1, strokeDasharray: '3,3' }} />
                     
-                    {/* Area gradient */}
+
                     <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                       <stop offset="0%" stopColor="#2196f3" stopOpacity="0.5" />
                       <stop offset="100%" stopColor="#2196f3" stopOpacity="0.1" />
                     </linearGradient>
                     
-                    {/* Area chart */}
                     <path
                       d={`M${responseTrendData.points} L300,170 L0,170 Z`}
                       fill="url(#areaGradient)"
                       className="chart-area"
                     />
                     
-                    {/* Line chart */}
                     <polyline
                       points={responseTrendData.points}
                       style={{ fill: 'none', stroke: '#2196f3', strokeWidth: 3 }}
                       className="chart-line"
                     />
                     
-                    {/* Data points */}
+
                     {responseTrendData.dates.map((date, index) => {
                       const x = index * (300 / (responseTrendData.dates.length - 1));
                       const y = (responseTrendData.times[index] / Math.max(...responseTrendData.times, 60)) * 140;
@@ -831,10 +748,8 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
                       );
                     })}
                     
-                    {/* X-axis */}
                     <line x1="0" y1="170" x2="300" y2="170" style={{ stroke: '#333', strokeWidth: 1 }} />
                     
-                    {/* X-axis labels */}
                     {responseTrendData.dates.map((date, index) => {
                       const x = index * (300 / (responseTrendData.dates.length - 1));
                       return (
@@ -842,7 +757,7 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
                       );
                     })}
                     
-                    {/* Y-axis labels */}
+
                     <text x="5" y="40" style={{ fill: '#aaa', fontSize: '10px' }}>15m</text>
                     <text x="5" y="80" style={{ fill: '#aaa', fontSize: '10px' }}>30m</text>
                     <text x="5" y="120" style={{ fill: '#aaa', fontSize: '10px' }}>45m</text>
@@ -863,12 +778,12 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
             <div className="card-body">
               <div className="scrollable-container" style={{ marginBottom: '30px' }}>
                 {resourceUtilization.map((resource, index) => {
-                  // Calculate stroke-dashoffset based on utilization percentage
-                  // Circle circumference is 2πr = 2 * π * 45 ≈ 283
+
+
                   const circumference = 2 * Math.PI * 45;
                   const dashoffset = circumference * (1 - resource.utilization / 100);
                   
-                  // Assign colors based on resource type
+
                   let color;
                   switch(resource.type) {
                     case 'Medical': color = '#2196f3'; break;
@@ -903,25 +818,8 @@ function Dashboard({ setPage, profile, emergencies, volunteers, donations }) {
               </div>
               
               <div style={{ background: '#1a1a1a', padding: '15px', borderRadius: '8px' }}>
-                <h3 style={{ color: 'var(--primary)', marginTop: 0, marginBottom: '15px', fontSize: '16px' }}>Nearby Resources</h3>
-                {nearbyResources.length > 0 ? (
-                  <ul style={{ color: '#ddd', paddingLeft: '20px' }}>
-                    {nearbyResources.slice(0, 4).map((resource, index) => (
-                      <li key={resource.id}>
-                        {resource.name || `Volunteer ${resource.id.substring(0, 4)}`} - {resource.distance}km away
-                        {resource.skills && resource.skills.length > 0 && (
-                          <span style={{ color: '#aaa', fontSize: '12px', marginLeft: '5px' }}>
-                            ({resource.skills.join(', ')})
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p style={{ color: '#aaa' }}>No nearby resources found</p>
-                )}
-                
-                <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                <h3 style={{ color: 'var(--primary)', marginTop: 0, marginBottom: '15px', fontSize: '16px' }}>Generate Emergency Report</h3>
+                <div style={{ textAlign: 'center' }}>
                   <button 
                     onClick={async () => {
                       setReportStatus({ generating: true, success: null, message: 'Generating report...' });

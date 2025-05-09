@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { addEmergencyReport } from '../services/emergencyService';
 import { getHighAccuracyPosition, getAddressFromCoords, getCachedGeocodingResult } from '../services/locationService';
+import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 function EmergencyReport({ setPage, profile }) {
   const [location, setLocation] = useState('');
+  const [locationInputError, setLocationInputError] = useState('');
   const [desc, setDesc] = useState('');
+  const [descError, setDescError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [autoLoc, setAutoLoc] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
   const [locError, setLocError] = useState('');
-
-
   const [locationData, setLocationData] = useState(null);
 
   useEffect(() => {
@@ -65,15 +67,93 @@ function EmergencyReport({ setPage, profile }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Function to analyze emergency description and determine severity and type
+  const analyzeEmergency = (description) => {
+    const text = description.toLowerCase();
+    let severity = 'medium'; // Default to medium instead of high
+    let type = 'general';
+    
+    // Determine emergency type based on keywords
+    if (text.includes('fire') || text.includes('burn') || text.includes('smoke')) {
+      type = 'fire';
+    } else if (text.includes('flood') || text.includes('water') || text.includes('drowning')) {
+      type = 'flood';
+    } else if (text.includes('accident') || text.includes('crash') || text.includes('collision')) {
+      type = 'accident';
+    } else if (text.includes('medical') || text.includes('injury') || text.includes('pain') || 
+              text.includes('heart') || text.includes('breathing') || text.includes('blood')) {
+      type = 'medical';
+    } else if (text.includes('crime') || text.includes('theft') || text.includes('robbery') || 
+              text.includes('attack') || text.includes('assault')) {
+      type = 'crime';
+    } else if (text.includes('building') || text.includes('collapse') || text.includes('structure')) {
+      type = 'structural';
+    }
+    
+    // Determine severity based on keywords and context
+    const highSeverityWords = ['severe', 'critical', 'dying', 'death', 'fatal', 'extreme', 'urgent', 
+                              'emergency', 'life-threatening', 'serious', 'major', 'trapped', 'unconscious',
+                              'not breathing', 'heart attack', 'stroke', 'bleeding heavily', 'explosion'];
+                              
+    const lowSeverityWords = ['minor', 'small', 'little', 'slight', 'mild', 'minimal',
+                            'controlled', 'contained', 'stable', 'resolved', 'recovering'];
+    
+    // Check for high severity indicators
+    for (const word of highSeverityWords) {
+      if (text.includes(word)) {
+        severity = 'high';
+        break;
+      }
+    }
+    
+    // If no high severity words found, check for low severity indicators
+    if (severity === 'medium') {
+      for (const word of lowSeverityWords) {
+        if (text.includes(word)) {
+          severity = 'low';
+          break;
+        }
+      }
+    }
+    
+    // Additional context-based severity assessment
+    if (type === 'fire' && (text.includes('spreading') || text.includes('big') || text.includes('large'))) {
+      severity = 'high';
+    }
+    
+    if (type === 'medical' && (text.includes('child') || text.includes('baby') || text.includes('pregnant'))) {
+      severity = 'high';
+    }
+    
+    return { type, severity };
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError('');
+    setLocationInputError('');
+    setDescError('');
     
     try {
       if (!location || !desc) {
         throw new Error('Please provide both location and description');
       }
+      
+      // Validate location (should not be only numbers unless it's auto-detected)
+      if (!autoLoc && /^[0-9\s,.]+$/.test(location)) {
+        setLocationInputError('Please enter a valid location name');
+        throw new Error('Please enter a valid location name');
+      }
+      
+      // Validate description (should be at least 10 characters)
+      if (desc.length < 10) {
+        setDescError('Please provide a more detailed description (at least 10 characters)');
+        throw new Error('Please provide a more detailed description');
+      }
+      
+      // Analyze emergency description to determine type and severity
+      const { type, severity } = analyzeEmergency(desc);
       
       // Create emergency report data with enhanced location information
       const reportData = {
@@ -81,8 +161,8 @@ function EmergencyReport({ setPage, profile }) {
         description: desc,
         userId: profile ? profile.uid : 'anonymous',
         userName: profile ? profile.displayName : 'Anonymous User',
-        severity: 'high', // Default severity
-        type: 'general', // Default type
+        severity, // Smart severity based on description
+        type, // Smart type based on description
         status: 'pending',
         autoDetectedLocation: autoLoc,
         // Add detailed location data if available
@@ -95,7 +175,30 @@ function EmergencyReport({ setPage, profile }) {
       };
       
       // Add to Firebase
-      await addEmergencyReport(reportData);
+      const reportId = await addEmergencyReport(reportData);
+      
+      // Update user profile with the new report
+      if (profile && profile.uid) {
+        const userRef = doc(db, 'users', profile.uid);
+        
+        // Get current user document to check if reports array exists
+        const userDoc = await getDoc(userRef);
+        const userData = userDoc.data();
+        
+        // Create a new report entry
+        const reportEntry = {
+          id: reportId,
+          desc: desc,
+          location: location,
+          date: new Date().toLocaleDateString()
+        };
+        
+        // Update the user document
+        await updateDoc(userRef, {
+          // Add the report to the reports array
+          reports: userData.reports ? arrayUnion(reportEntry) : [reportEntry]
+        });
+      }
       
       // Show success message
       setSubmitted(true);
@@ -172,18 +275,24 @@ function EmergencyReport({ setPage, profile }) {
                 value={location}
                 onChange={e => {
                   setLocation(e.target.value);
-                  setAutoLoc(false);
-                  setLocationData(null); // Clear detailed location data when manually editing
+                  setLocationInputError('');
+                  if (autoLoc) setAutoLoc(false); // Reset auto-detection flag if user edits location
                 }}
-                placeholder="Enter location"
+                placeholder="Where is the emergency?"
                 required
-                style={{
-                  paddingLeft: autoLoc ? '35px' : '12px',
+                style={{ 
+                  marginTop: '8px',
                   transition: 'all 0.3s',
-                  borderColor: autoLoc ? 'var(--primary)' : '#444',
-                  boxShadow: autoLoc ? '0 0 0 1px var(--primary)' : 'none'
+                  borderColor: locationInputError ? '#e53935' : (location ? 'var(--primary)' : '#444'),
+                  boxShadow: locationInputError ? '0 0 0 1px #e53935' : (location ? '0 0 0 1px var(--primary)' : 'none')
                 }}
+                disabled={submitting || locLoading}
               />
+              {locationInputError && (
+                <div style={{ color: '#e53935', fontSize: '12px', marginTop: '4px' }}>
+                  {locationInputError}
+                </div>
+              )}
               {autoLoc && (
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
@@ -252,17 +361,25 @@ function EmergencyReport({ setPage, profile }) {
             </label>
             <textarea
               value={desc}
-              onChange={e => setDesc(e.target.value)}
+              onChange={e => {
+                setDesc(e.target.value);
+                setDescError('');
+              }}
               placeholder="Describe the emergency situation in detail"
               required
               style={{ 
                 marginTop: '8px',
                 minHeight: '120px',
                 transition: 'all 0.3s',
-                borderColor: desc ? 'var(--primary)' : '#444',
-                boxShadow: desc ? '0 0 0 1px var(--primary)' : 'none'
+                borderColor: descError ? '#e53935' : (desc ? 'var(--primary)' : '#444'),
+                boxShadow: descError ? '0 0 0 1px #e53935' : (desc ? '0 0 0 1px var(--primary)' : 'none')
               }}
-            />  
+            />
+            {descError && (
+              <div style={{ color: '#e53935', fontSize: '12px', marginTop: '4px' }}>
+                {descError}
+              </div>
+            )}
           </div>
           {error && (
             <div style={{ 

@@ -42,7 +42,7 @@ export const getAddressFromCoords = async (lat, lng) => {
 
 export const getFallbackAddress = (lat, lng) => {
 
-  const delhiAreas = [
+  const indiaAreas = [
     { name: 'Rohini', lat: 28.7041, lng: 77.1025, radius: 0.05, pincode: '110085' },
     { name: 'Saket', lat: 28.5214, lng: 77.2159, radius: 0.04, pincode: '110017' },
     { name: 'Laxmi Nagar', lat: 28.6304, lng: 77.2812, radius: 0.03, pincode: '110092' },
@@ -61,7 +61,7 @@ export const getFallbackAddress = (lat, lng) => {
   let closestArea = null;
   let minDistance = Number.MAX_VALUE;
   
-  delhiAreas.forEach(area => {
+  indiaAreas.forEach(area => {
     const distance = calculateDistance(lat, lng, area.lat, area.lng);
     if (distance < minDistance) {
       minDistance = distance;
@@ -72,10 +72,10 @@ export const getFallbackAddress = (lat, lng) => {
 
   if (closestArea && minDistance <= closestArea.radius) {
     return {
-      formattedAddress: `${closestArea.name}, Delhi - ${closestArea.pincode}`,
+      formattedAddress: `${closestArea.name}, India - ${closestArea.pincode}`,
       components: {
         neighbourhood: closestArea.name,
-        city: 'Delhi',
+        city: 'India',
         postcode: closestArea.pincode,
         country: 'India'
       },
@@ -86,9 +86,9 @@ export const getFallbackAddress = (lat, lng) => {
   
 
   return {
-    formattedAddress: `Delhi, India (Coordinates: ${lat.toFixed(5)}, ${lng.toFixed(5)})`,
+    formattedAddress: `India (Coordinates: ${lat.toFixed(5)}, ${lng.toFixed(5)})`,
     components: {
-      city: 'Delhi',
+      city: 'India',
       country: 'India'
     },
     coords: { lat, lng },

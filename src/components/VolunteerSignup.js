@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { createVolunteer } from '../services/volunteerService';
-import { auth } from '../firebase';
+import { createVolunteer, getVolunteerByUserId } from '../services/volunteerService';
+import { auth, db } from '../firebase';
 import { getHighAccuracyPosition, getAddressFromCoords } from '../services/locationService';
+import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 
 function VolunteerSignup({ setPage, profile }) {
   const [name, setName] = useState(profile?.displayName || '');
@@ -10,18 +11,48 @@ function VolunteerSignup({ setPage, profile }) {
   const [location, setLocation] = useState('');
   const [locationCoords, setLocationCoords] = useState(null);
   const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [availability, setAvailability] = useState('weekends');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [detectingLocation, setDetectingLocation] = useState(false);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
 
+
+  // Use a ref to track if we've already checked volunteer status
+  const [statusChecked, setStatusChecked] = useState(false);
 
   useEffect(() => {
     if (profile?.location) {
       setLocation(profile.location);
     }
-  }, [profile]);
+    
+    // Only check volunteer status once when component mounts
+    if (!statusChecked) {
+      const checkVolunteerStatus = async () => {
+        setCheckingStatus(true);
+        try {
+          if (auth.currentUser) {
+            const userId = auth.currentUser.uid;
+            console.log('Checking volunteer status for user:', userId);
+            const existingVolunteer = await getVolunteerByUserId(userId);
+            if (existingVolunteer) {
+              setAlreadyRegistered(true);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking volunteer status:', error);
+        } finally {
+          setCheckingStatus(false);
+          setStatusChecked(true); // Mark as checked
+        }
+      };
+      
+      checkVolunteerStatus();
+    }
+  }, [profile, statusChecked]);
 
 
   const detectLocation = async () => {
@@ -55,6 +86,7 @@ function VolunteerSignup({ setPage, profile }) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setPhoneError('');
     
     try {
       const id = generateId();
@@ -68,8 +100,17 @@ function VolunteerSignup({ setPage, profile }) {
         throw new Error('Please provide your name and location');
       }
       
+      // Validate phone number
+      const phoneRegex = /^[0-9]{10}$/;
+      if (!phoneRegex.test(phone)) {
+        setPhoneError('Please enter a valid 10-digit phone number');
+        throw new Error('Please enter a valid 10-digit phone number');
+      }
+      
+      // We'll skip the redundant check in the component since we've already checked once
+      // and the service will check again
 
-      await createVolunteer({
+      const volunteerData = {
         id,
         name,
         type,
@@ -83,19 +124,33 @@ function VolunteerSignup({ setPage, profile }) {
         availability,
         status: 'active',
         userId,
-        createdAt: new Date()
-      });
+        createdAt: new Date(),
+        // Add flags for the optimized service function
+        skipExistingCheck: false, // Still check for existing volunteer
+        updateUserProfile: true    // Update user profile in the same function call
+      };
+      
+      console.log('Creating volunteer with data:', { ...volunteerData, userId: 'REDACTED' });
+      
+      // Create volunteer record and update user profile in one service call
+      const result = await createVolunteer(volunteerData);
+      console.log('Volunteer created successfully');
+      
+      // No need for separate user profile update - it's handled in the service
       
       setSubmitted(true);
 
-      setTimeout(() => setPage('landing'), 1500);
+      // Give more time to see the success animation
+      setTimeout(() => setPage('landing'), 2500);
     } catch (error) {
       console.error('Error registering volunteer:', error);
       
       if (error.message.includes('must be logged in')) {
-
         setError(error.message);
         setTimeout(() => setPage('login'), 3000);
+      } else if (error.message.includes('already registered')) {
+        // Don't show error message for already registered - we show a different UI
+        setAlreadyRegistered(true);
       } else {
         setError(error.message || 'Failed to register. Please try again.');
       }
@@ -107,9 +162,64 @@ function VolunteerSignup({ setPage, profile }) {
   return (
     <div className="card fade-in">
       <h2 style={{ textAlign: 'center' }}>Volunteer / Donor Signup</h2>
-      {submitted ? (
-        <div style={{ color: '#43a047', fontWeight: 'bold', fontSize: 20, textAlign: 'center', margin: '2rem 0', animation: 'fadeIn 1.2s' }}>
-          Thank you for joining Saarthi!
+      {checkingStatus ? (
+        <div style={{ textAlign: 'center', margin: '2rem 0' }}>
+          <div style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid rgba(255,153,0,0.3)', borderRadius: '50%', borderTopColor: 'var(--primary)', animation: 'spin 1s linear infinite' }}></div>
+          <p style={{ marginTop: '1rem', color: '#aaa' }}>Checking registration status...</p>
+        </div>
+      ) : alreadyRegistered ? (
+        <div style={{ textAlign: 'center', margin: '2rem 0' }}>
+          <div style={{ 
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            background: 'var(--primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem auto',
+            fontSize: '40px'
+          }}>
+            ✓
+          </div>
+          <h3 style={{ color: 'var(--primary)', marginBottom: '1rem' }}>You're Already Registered!</h3>
+          <p style={{ color: '#aaa', marginBottom: '1.5rem' }}>You have already registered as a volunteer/donor with Saarthi.</p>
+          <button 
+            onClick={() => setPage('landing')} 
+            style={{ 
+              background: 'var(--primary)',
+              color: 'black',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      ) : submitted ? (
+        <div style={{ textAlign: 'center', margin: '2rem 0' }}>
+          <div style={{ 
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            background: 'var(--primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto',
+            boxShadow: '0 0 30px rgba(255, 153, 0, 0.5)',
+            animation: 'pulse 1.5s infinite, scaleIn 0.5s'
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+          <h3 style={{ color: 'var(--primary)', marginTop: '1.5rem', animation: 'fadeIn 0.5s' }}>Thank you for joining Saarthi!</h3>
+          <p style={{ color: '#aaa', marginTop: '0.5rem', animation: 'fadeIn 0.5s 0.2s both' }}>Your registration has been successfully recorded.</p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} autoComplete="off">
@@ -204,12 +314,27 @@ function VolunteerSignup({ setPage, profile }) {
             <input 
               type="tel" 
               value={phone} 
-              onChange={e => setPhone(e.target.value)} 
+              onChange={e => {
+                // Only allow digits
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                setPhone(value);
+                setPhoneError('');
+              }} 
               required 
-              style={{ marginTop: 4 }} 
-              placeholder="Your contact number"
+              style={{ 
+                marginTop: 4,
+                borderColor: phoneError ? '#e53935' : undefined
+              }} 
+              placeholder="10-digit phone number"
               disabled={loading}
+              maxLength={10}
+              pattern="[0-9]{10}"
             />
+            {phoneError && (
+              <div style={{ color: '#e53935', fontSize: '12px', marginTop: '4px' }}>
+                {phoneError}
+              </div>
+            )}
           </div>
           
           {type === 'volunteer' && (

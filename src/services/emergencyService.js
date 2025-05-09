@@ -27,11 +27,12 @@ export const addEmergencyReport = async (reportData) => {
     });
     return docRef.id;
   } catch (error) {
+    console.error('Error adding emergency report:', error);
     throw error;
   }
 };
 
-// Get all emergency reports
+
 export const getEmergencyReports = async () => {
   try {
     const q = query(emergenciesCollection, orderBy('createdAt', 'desc'));

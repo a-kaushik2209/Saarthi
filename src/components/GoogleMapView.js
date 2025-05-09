@@ -142,12 +142,23 @@ function GoogleMapView({ emergencies = [], onMarkerClick }) {
     setMap(null);
   }, []);
 
-  const handleMarkerClick = (alert) => {
-    setSelectedEmergency(alert);
+  const handleMarkerClick = useCallback((alert) => {
+    // Ensure alert has all required properties before setting it
+    const safeAlert = {
+      ...alert,
+      // Ensure type property exists (added in our smart categorization)
+      type: alert.type || 'general',
+      // Ensure other required properties exist
+      severity: alert.severity || 'mid',
+      position: alert.position || { lat: alert.lat, lng: alert.lng },
+      title: alert.title || alert.desc || 'Emergency Alert'
+    };
+    
+    setSelectedEmergency(safeAlert);
     if (onMarkerClick) {
-      onMarkerClick(alert);
+      onMarkerClick(safeAlert);
     }
-  };
+  }, [onMarkerClick]);
 
   // Fit map bounds to include all markers or center on user location
   useEffect(() => {

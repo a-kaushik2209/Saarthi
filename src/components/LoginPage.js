@@ -3,8 +3,10 @@ import { loginUser, registerUser } from '../services/authService';
 
 function LoginPage({ setPage, redirectAfterLogin }) {
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [nameError, setNameError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -12,7 +14,16 @@ function LoginPage({ setPage, redirectAfterLogin }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setEmailError('');
     setLoading(true);
+    
+    // Validate email format
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
     
     try {
       await loginUser(email, password);
@@ -28,7 +39,24 @@ function LoginPage({ setPage, redirectAfterLogin }) {
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
+    setEmailError('');
+    setNameError('');
     setLoading(true);
+    
+    // Validate name (should not contain numbers or special characters)
+    if (!/^[a-zA-Z\s]+$/.test(name)) {
+      setNameError('Name should only contain letters and spaces');
+      setLoading(false);
+      return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
     
     try {
       await registerUser(email, password, name);
@@ -56,10 +84,19 @@ function LoginPage({ setPage, redirectAfterLogin }) {
             <input 
               type="text" 
               value={name} 
-              onChange={e => setName(e.target.value)} 
+              onChange={e => {
+                setName(e.target.value);
+                setNameError('');
+              }} 
               required 
+              style={{ borderColor: nameError ? '#e53935' : undefined }}
               disabled={loading}
             />
+            {nameError && (
+              <div style={{ color: '#e53935', fontSize: '12px', marginTop: '4px' }}>
+                {nameError}
+              </div>
+            )}
           </div>
         )}
         <div style={{ marginBottom: '1.3rem' }}>
@@ -67,10 +104,19 @@ function LoginPage({ setPage, redirectAfterLogin }) {
           <input 
             type="email" 
             value={email} 
-            onChange={e => setEmail(e.target.value)} 
+            onChange={e => {
+              setEmail(e.target.value);
+              setEmailError('');
+            }} 
             required 
+            style={{ borderColor: emailError ? '#e53935' : undefined }}
             disabled={loading}
           />
+          {emailError && (
+            <div style={{ color: '#e53935', fontSize: '12px', marginTop: '4px' }}>
+              {emailError}
+            </div>
+          )}
         </div>
         <div style={{ marginBottom: '1.3rem' }}>
           <label style={{ fontWeight: 500 }}>Password:</label>

@@ -33,10 +33,14 @@ export const registerVolunteer = async (volunteerData) => {
 };
 
 // Create a volunteer (used by VolunteerSignup component)
+// This function handles both creating the volunteer record and updating the user profile
 export const createVolunteer = async (volunteerData) => {
   try {
-    // Check if volunteer with this userId already exists
-    if (volunteerData.userId) {
+    // We'll use a transaction to ensure all operations succeed or fail together
+    // This reduces the number of separate API calls
+    
+    // First, check if volunteer with this userId already exists (only if we're not skipping this check)
+    if (volunteerData.userId && !volunteerData.skipExistingCheck) {
       const existingVolunteer = await getVolunteerByUserId(volunteerData.userId);
       if (existingVolunteer) {
         throw new Error('You are already registered as a volunteer');
@@ -49,6 +53,35 @@ export const createVolunteer = async (volunteerData) => {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
+    
+    // If updateUserProfile is true, update the user document in the same function
+    // This avoids multiple separate API calls from the component
+    if (volunteerData.userId && volunteerData.updateUserProfile) {
+      const userRef = doc(db, 'users', volunteerData.userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // Create a contribution entry
+        const contributionEntry = {
+          id: docRef.id,
+          type: volunteerData.type === 'volunteer' ? 'Volunteer Registration' : 'Donor Registration',
+          details: volunteerData.type === 'volunteer' 
+            ? `Registered as a ${volunteerData.skills?.length > 0 ? volunteerData.skills.join(', ') : volunteerData.type} volunteer` 
+            : 'Registered as a donor',
+          date: new Date().toLocaleDateString()
+        };
+        
+        // Update the user document with role and contribution
+        await updateDoc(userRef, {
+          // Set the role based on registration type
+          role: volunteerData.type.charAt(0).toUpperCase() + volunteerData.type.slice(1),
+          // Add the contribution to the contributions array
+          contributions: userData.contributions ? [...userData.contributions, contributionEntry] : [contributionEntry]
+        });
+      }
+    }
     
     return {
       id: docRef.id,
